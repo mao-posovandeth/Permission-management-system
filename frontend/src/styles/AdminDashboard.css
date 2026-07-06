@@ -729,8 +729,12 @@ body, html, #root {
   background: #ffffff; border-radius: 24px;
   width: 100%; max-width: 460px;
   box-shadow: 0 25px 50px -12px rgba(0,0,0,0.2);
-  border: 1px solid #f1f5f9; overflow: hidden;
+  border: 1px solid #f1f5f9;
   animation: cardSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .user-modal-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -744,7 +748,7 @@ body, html, #root {
 }
 .close-modal-btn:hover { background: #cbd5e1; color: #334155; }
 
-.user-modal-body { padding: 28px; display: flex; flex-direction: column; gap: 18px; }
+.user-modal-body { padding: 28px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; flex: 1; min-height: 0; }
 .user-field { display: flex; flex-direction: column; gap: 8px; }
 .user-field label {
   font-size: 12px; font-weight: 700; color: #475569;
@@ -900,3 +904,287 @@ body, html, #root {
   .bulk-bar { flex-direction: column; align-items: flex-start; }
   .analytics-summary { flex-direction: column; gap: 12px; }
 }
+
+/* ==========================================================================
+   ABSENCE FEATURES (badge + warning on cards, and Absence Tracker page)
+   ========================================================================== */
+
+/* Always-visible absence % badge on each request card */
+.lec-absence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 9999px;
+  padding: 5px 12px;
+  width: fit-content;
+  border: 1px solid transparent;
+  margin-top: 6px;
+}
+.lec-absence-badge.ok { color: #059669; background: #ecfdf5; border-color: #d1fae5; }
+.lec-absence-badge.near { color: #b45309; background: #fffbeb; border-color: #fde68a; }
+.lec-absence-badge.over { color: #b91c1c; background: #fff1f2; border-color: #fecaca; }
+.lec-absence-badge strong { font-weight: 800; }
+.lec-absence-tag { font-weight: 800; }
+
+/* Near/over warning line on a card */
+.lec-absence-warn {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-top: 8px;
+}
+.lec-absence-warn.near { color: #b45309; background: #fffbeb; border: 1px solid #fde68a; }
+.lec-absence-warn.over { color: #b91c1c; background: #fff1f2; border: 1px solid #fecaca; }
+
+/* Absence Tracker page */
+.lec-absence-note {
+  font-size: 13px;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+.lec-absence-list { display: flex; flex-direction: column; gap: 16px; }
+.lec-absence-student {
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 16px;
+  padding: 18px 20px;
+}
+.lec-absence-student-head {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.lec-absence-subjects { display: flex; flex-direction: column; gap: 14px; }
+.lec-absence-subject-row { display: flex; align-items: center; gap: 14px; }
+.lec-absence-subject-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+  width: 130px;
+  flex-shrink: 0;
+}
+.lec-absence-bar-track {
+  position: relative;
+  flex: 1;
+  height: 10px;
+  background: #e2e8f0;
+  border-radius: 9999px;
+  overflow: hidden;
+  min-width: 80px;
+}
+.lec-absence-bar-fill { height: 100%; border-radius: 9999px; transition: width 0.3s ease; }
+.lec-absence-bar-fill.fill-ok { background: #10b981; }
+.lec-absence-bar-fill.fill-near { background: #f59e0b; }
+.lec-absence-bar-fill.fill-over { background: #f43f5e; }
+.lec-absence-bar-mark { position: absolute; top: 0; bottom: 0; width: 2px; background: #0f172a; opacity: 0.35; }
+
+@media (max-width: 768px) {
+  .lec-absence-subject-row { flex-wrap: wrap; }
+  .lec-absence-subject-name { width: auto; }
+  .lec-absence-bar-track { flex-basis: 100%; order: 3; }
+}
+
+/* ==========================================================================
+   GROUPED STUDENT CARDS (one collapsible card per student)
+   ========================================================================== */
+.lec-request-list { display: flex; flex-direction: column; gap: 14px; }
+
+.lec-group-card {
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 18px;
+  padding: 20px;
+  transition: box-shadow 0.2s;
+}
+.lec-group-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.05); }
+
+.lec-group-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+}
+.lec-group-open .lec-group-header {
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.lec-group-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.lec-group-pending-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: #d97706;
+  background: #fffbeb;
+  border: 1px solid #fef3c7;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+.lec-group-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  background: #e2e8f0;
+  padding: 5px 14px;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+.lec-group-chevron {
+  font-size: 12px;
+  color: #94a3b8;
+  transition: transform 0.2s ease;
+}
+.lec-group-chevron.open { transform: rotate(180deg); }
+
+.lec-risk-flag {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.lec-risk-flag.over { color: #b91c1c; background: #fff1f2; border: 1px solid #fecaca; }
+.lec-risk-flag.near { color: #b45309; background: #fffbeb; border: 1px solid #fde68a; }
+
+.lec-group-body { display: flex; flex-direction: column; gap: 12px; }
+.lec-group-request {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lec-group-request-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.lec-group-request-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid #f1f5f9;
+}
+.lec-action-btns { display: flex; gap: 8px; margin-left: auto; }
+
+.lec-photo-btn {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #dbeafe;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.lec-photo-btn:hover { background: #dbeafe; }
+
+.lec-reject-reason-display {
+  font-size: 12.5px;
+  color: #b91c1c;
+  background: #fff1f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+.lec-reject-reason-display span { font-weight: 700; }
+
+/* ==========================================================================
+   PHOTO PROOF LIGHTBOX
+   ========================================================================== */
+.lec-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+.lec-lightbox-box {
+  position: relative;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 16px;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+.lec-lightbox-box img {
+  max-width: 100%;
+  max-height: 78vh;
+  border-radius: 10px;
+  display: block;
+}
+.lec-lightbox-close {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #0f172a;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+}
+.checklist-box {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 8px;
+}
+.checklist-box-small { max-height: 160px; }
+.checklist-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  border-radius: 8px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.checklist-row:hover { background: #eff6ff; }
+.checklist-row input { width: 16px; height: 16px; cursor: pointer; accent-color: #3b82f6; flex-shrink: 0; }
+.checklist-row span { text-transform: none; }
+

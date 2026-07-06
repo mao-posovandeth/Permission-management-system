@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import { setWebhook, notifyLecturer, handleWebhook, linkForLecturer, BOT_USERNAME } from "./telegram-bot.js";
 import cors from "cors";
 import crypto from "crypto";
 import multer from "multer";
@@ -151,7 +152,7 @@ app.get("/subjects", (req, res) => {
 app.post("/request", upload.single("proof_image"), (req, res) => {
   const {
     student_id, student_name, group_name,
-    reason, request_date, subject_name, class_time,
+    reason, request_date, subject_name, class_time, term,
   } = req.body;
 
   // If a file was uploaded, store its URL path; otherwise null
@@ -160,15 +161,21 @@ app.post("/request", upload.single("proof_image"), (req, res) => {
   const sql = `
     INSERT INTO requests
       (student_id, student_name, group_name, reason, request_date,
-       subject_name, class_time, status, status_viewed, proof_image_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       subject_name, class_time, status, status_viewed, proof_image_url, term)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   db.query(sql, [
     student_id, student_name, group_name, reason, request_date,
-    subject_name, class_time, "Pending", 0, proof_image_url,
-  ], (err) => {
+    subject_name, class_time, "Pending", 0, proof_image_url, term || "Term 1",
+  ], (err, result) => {
     if (err) { console.log("Database Error:", err); return res.status(500).json("Database Error"); }
+    // Fire Telegram notification to the assigned lecturer(s) — don't block the response
+    notifyLecturer(db, {
+      request_id: result.insertId,
+      student_name, group_name, subject_name, class_time,
+      request_date, reason, proof_image_url,
+    });
     res.json("Request Submitted Successfully");
   });
 });
@@ -273,7 +280,7 @@ app.get("/users", (req, res) => {
 
 // ADD NEW USER (and link to a group if they're a student)
 app.post("/users", (req, res) => {
-  const { user_id, name, email, password, role, group_name } = req.body;
+  const { user_id, name, email, password, role, group_name, assignments } = req.body;
   if (!user_id || !name || !email || !password || !role) {
     return res.status(400).json({ message: "Missing required fields" });
   }
@@ -299,6 +306,16 @@ app.post("/users", (req, res) => {
           res.json({ message: "User created" });
         });
       });
+    } else if (role.toLowerCase() === "lecturer" && Array.isArray(assignments) && assignments.length > 0) {
+      // Save what a lecturer teaches so their dashboard filters correctly
+      const values = assignments
+        .filter(a => a && a.subject_name && a.group_name)
+        .map(a => [user_id, a.subject_name, a.group_name]);
+      if (values.length === 0) return res.json({ message: "User created" });
+      db.query("INSERT INTO lecturer_assignments (lecturer_id, subject_name, group_name) VALUES ?", [values], (aErr) => {
+        if (aErr) console.log(aErr);
+        res.json({ message: "User created" });
+      });
     } else {
       res.json({ message: "User created" });
     }
@@ -308,7 +325,7 @@ app.post("/users", (req, res) => {
 // EDIT USER (optionally change password, and re-link group for students)
 app.put("/users/:id", (req, res) => {
   const { id } = req.params;
-  const { name, email, password, role, group_name } = req.body;
+  const { name, email, password, role, group_name, assignments } = req.body;
 
   // Build the user update — skip password if left blank so it stays unchanged
   let sql, params;
@@ -338,6 +355,21 @@ app.put("/users/:id", (req, res) => {
           });
         });
       });
+    } else if (role && role.toLowerCase() === "lecturer") {
+      // Replace assignments: wipe old ones, insert new (only if any were provided)
+      db.query("DELETE FROM lecturer_assignments WHERE lecturer_id=?", [id], () => {
+        if (!Array.isArray(assignments) || assignments.length === 0) {
+          return res.json({ message: "User updated" });
+        }
+        const values = assignments
+          .filter(a => a && a.subject_name && a.group_name)
+          .map(a => [id, a.subject_name, a.group_name]);
+        if (values.length === 0) return res.json({ message: "User updated" });
+        db.query("INSERT INTO lecturer_assignments (lecturer_id, subject_name, group_name) VALUES ?", [values], (aErr) => {
+          if (aErr) console.log(aErr);
+          res.json({ message: "User updated" });
+        });
+      });
     } else {
       // If they're no longer a student, clear any group mapping
       db.query("DELETE FROM student_groups WHERE student_id=?", [id], () => {
@@ -359,6 +391,41 @@ app.delete("/users/:id", (req, res) => {
   });
 });
 
+// Fetch a lecturer's assignments so admin's Edit form can preload them
+app.get("/users/:id/assignments", (req, res) => {
+  db.query("SELECT subject_name, group_name FROM lecturer_assignments WHERE lecturer_id = ?", [req.params.id], (err, rows) => {
+    if (err) { console.log(err); return res.status(500).json([]); }
+    res.json(rows);
+  });
+});
+
+// ============================================================
+//  LECTURER ASSIGNMENTS — which (subject + group) pairs a lecturer teaches
+//  The lecturer dashboard uses this to show only their own requests.
+// ============================================================
+app.get("/lecturer-assignments/:lecturerId", (req, res) => {
+  const sql = "SELECT subject_name, group_name FROM lecturer_assignments WHERE lecturer_id = ?";
+  db.query(sql, [req.params.lecturerId], (err, results) => {
+    if (err) { console.log(err); return res.status(500).json({ message: "Failed to fetch assignments" }); }
+    res.json(results);
+  });
+});
+
+// ============================================================
+//  TELEGRAM
+// ============================================================
+// Endpoint Telegram calls when the lecturer taps Accept/Reject or sends /start
+app.post("/telegram/webhook", (req, res) => {
+  handleWebhook(db, req.body, res);
+});
+
+// Admin/lecturer can look up their linking URL to open in Telegram
+app.get("/telegram/link/:lecturerId", (req, res) => {
+  res.json({ url: linkForLecturer(req.params.lecturerId), bot_username: BOT_USERNAME });
+});
+
 app.listen(5000, () => {
   console.log("Server running on port 5000");
+  // Register the webhook with Telegram so it knows where to send updates
+  setWebhook();
 });

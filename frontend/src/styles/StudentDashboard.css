@@ -2037,14 +2037,16 @@ body, html, #root {
   font-size: 22px;
   cursor: pointer;
   color: #0f172a;
-  padding: 6px 10px;
+  padding: 6px 6px 6px 0;
   border-radius: 10px;
   line-height: 1;
   transition: background 0.15s;
+  margin-left: 0;
 }
 .hamburger-btn:hover { background: #f1f5f9; }
 
-.mobile-sidebar-backdrop {
+.mobile-sidebar-backdrop,
+.sidebar-overlay {
   display: none;
   position: fixed;
   inset: 0;
@@ -2087,11 +2089,13 @@ body, html, #root {
     transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: none;
   }
-  .sidebar.sidebar-mobile-open {
+  .sidebar.sidebar-mobile-open,
+  .sidebar.sidebar-open {
     transform: translateX(0);
     box-shadow: 8px 0 32px rgba(0,0,0,0.25);
   }
-  .mobile-sidebar-backdrop { display: block; }
+  .mobile-sidebar-backdrop,
+  .sidebar-overlay { display: block; }
 
   /* Hamburger button visible on mobile */
   .hamburger-btn { display: flex; align-items: center; }
@@ -2103,7 +2107,7 @@ body, html, #root {
   .top-header {
     height: auto;
     min-height: 70px;
-    padding: 14px 16px;
+    padding: 14px 16px 14px 0;
     flex-wrap: wrap;
     gap: 8px;
   }
@@ -2228,8 +2232,6 @@ body, html, #root {
 
 @media (max-width: 768px) {
   .sidebar { position: fixed; }
-  .sidebar-close-btn { display: flex; align-items: center; justify-content: center; }
-  .brand-header { padding-right: 40px; }
 }
 
 /* ==========================================================================
@@ -2431,3 +2433,286 @@ body, html, #root {
   background: #dc2626;
   transform: translateY(-1px);
 }
+
+/* ==========================================================================
+   ATTENDANCE & ABSENCE LIMIT PAGE
+   ========================================================================== */
+.attendance-rule-note {
+  font-size: 13px;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+.attendance-rule-note strong { color: #0f172a; font-weight: 700; }
+
+.attendance-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.attendance-card {
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 16px;
+  padding: 18px 20px;
+  transition: box-shadow 0.2s;
+}
+.attendance-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.04); }
+.attendance-card.att-failed {
+  background: #fff5f5;
+  border-color: #fecaca;
+}
+
+.attendance-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.attendance-subject {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.attendance-teacher {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.attendance-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 14px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.att-badge-safe { background: #ecfdf5; color: #059669; border: 1px solid #d1fae5; }
+.att-badge-fail { background: #fff1f2; color: #e11d48; border: 1px solid #ffe4e6; }
+
+.attendance-bar-track {
+  position: relative;
+  height: 10px;
+  background: #e2e8f0;
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.attendance-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.4s ease;
+}
+.fill-safe { background: #10b981; }
+.fill-fail { background: #f43f5e; }
+
+.attendance-threshold-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #0f172a;
+  opacity: 0.35;
+}
+
+.attendance-meta-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+/* ==========================================================================
+   TERM 1 / 2 / 3 TABS (visual only)
+   ========================================================================== */
+.term-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.term-tab {
+  padding: 8px 22px;
+  border-radius: 9999px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.term-tab:hover { background: #f1f5f9; color: #334155; }
+.term-tab-active {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+}
+
+/* Standalone placement on the View Status + Attendance pages */
+.page-term-tabs { margin-bottom: 20px; }
+
+/* Placement inside the Select Class Matrix modal */
+.modal-term-tabs-wrap {
+  padding: 16px 28px 0;
+}
+
+@media (max-width: 768px) {
+  .term-tab { padding: 7px 16px; font-size: 12px; }
+  .modal-term-tabs-wrap { padding: 12px 16px 0; }
+}
+
+/* ==========================================================================
+   CLICK-TO-PICK CALENDAR DATE PICKER
+   ========================================================================== */
+.calendar-picker { position: relative; }
+
+.calendar-trigger {
+  width: 100%;
+  padding: 14px 18px;
+  font-size: 15px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  font-weight: 500;
+}
+.calendar-trigger:hover { background: #f1f5f9; border-color: #cbd5e1; }
+.calendar-trigger.has-value { color: #0f172a; font-weight: 600; }
+.calendar-trigger-icon { font-size: 16px; }
+
+.calendar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.calendar-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 50;
+  width: 320px;
+  max-width: 100%;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.2);
+  padding: 16px;
+  animation: cardSlideUp 0.2s ease;
+}
+
+.calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.calendar-month-label {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+}
+.calendar-nav {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.calendar-nav:hover { background: #e2e8f0; }
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.calendar-weekdays span {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  padding: 4px 0;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.calendar-cell {
+  aspect-ratio: 1;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.calendar-cell:hover:not(.empty) { background: #eff6ff; color: #2563eb; }
+.calendar-cell.empty { cursor: default; }
+.calendar-cell.today { border: 1px solid #bfdbfe; color: #2563eb; }
+.calendar-cell.selected { background: #3b82f6; color: #ffffff; }
+.calendar-cell.selected:hover { background: #2563eb; color: #ffffff; }
+
+/* Past dates are disabled (must request today or later) */
+.calendar-cell:disabled,
+.calendar-cell.disabled {
+  color: #cbd5e1;
+  cursor: not-allowed;
+}
+.calendar-cell.disabled:hover { background: transparent; color: #cbd5e1; }
+
+/* Calendar footer (multi-day select mode) */
+.calendar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+.calendar-count { font-size: 12px; font-weight: 600; color: #64748b; }
+.calendar-done-btn {
+  background: #3b82f6;
+  color: #ffffff;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.calendar-done-btn:hover { background: #2563eb; }

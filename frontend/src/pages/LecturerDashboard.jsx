@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import {
+  Home, ClipboardList, BarChart3, Bell, User, HelpCircle, LogOut,
+  Menu, Calendar, Clock, CheckCircle2, XCircle, Hourglass,
+  FileText, RefreshCw, Search, BookOpen, Image as ImageIcon,
+  PartyPopper, ChevronDown, ChevronLeft, ChevronRight,
+  AlertTriangle, X, Check, Hand
+} from "lucide-react";
 import "../styles/LecturerDashboard.css";
 
 function LecturerDashboard() {
@@ -27,9 +34,15 @@ function LecturerDashboard() {
   // Photo lightbox
   const [lightboxUrl, setLightboxUrl] = useState(null);
 
+  // Which student's grouped card is expanded (only one open at a time)
+  const [expandedStudent, setExpandedStudent] = useState(null);
+
   // Dashboard sort + auto-refresh
   const [dashboardSort, setDashboardSort] = useState("newest");
   const autoRefreshRef = useRef(null);
+
+  // This lecturer's assigned (subject + group) pairs — they only see matching requests
+  const assignmentsRef = useRef([]);
 
   useEffect(() => {
     const name = localStorage.getItem("student_name");
@@ -40,15 +53,35 @@ function LecturerDashboard() {
       return;
     }
     setLecturerName(name);
-    fetchRequests();
+    loadAssignmentsThenRequests();
     autoRefreshRef.current = setInterval(fetchRequests, 30000);
     return () => clearInterval(autoRefreshRef.current);
   }, [navigate]);
 
+  // Load this lecturer's assignments first, then load (and filter) the requests
+  const loadAssignmentsThenRequests = async () => {
+    const lecturerId = localStorage.getItem("user_id");
+    try {
+      const res = await axios.get(`http://localhost:5000/lecturer-assignments/${lecturerId}`);
+      assignmentsRef.current = res.data || [];
+    } catch {
+      assignmentsRef.current = [];
+    }
+    fetchRequests();
+  };
+
+  // A request is visible only if its subject AND group match one of the lecturer's assignments
+  const matchesAssignment = (req) => {
+    const list = assignmentsRef.current;
+    if (!list || list.length === 0) return false;
+    return list.some(a => a.subject_name === req.subject_name && a.group_name === req.group_name);
+  };
+
   const fetchRequests = async () => {
     try {
       const res = await axios.get("http://localhost:5000/requests");
-      setRequests(res.data || []);
+      const onlyMine = (res.data || []).filter(matchesAssignment);
+      setRequests(onlyMine);
     } catch (err) {
       showToast("Failed to load requests", "#ef4444");
     }
@@ -139,6 +172,29 @@ function LecturerDashboard() {
     rejected: requests.filter(r => ["rejected", "reject"].includes(r.status?.toLowerCase())).length,
   };
 
+  // Absence limit: each subject has ~16 sessions; over 20% approved absences fails the class.
+  // Warn the lecturer when a student is near (3 = 19%) or over (4+ = 25%+) for a subject.
+  const ABSENCE_TOTAL_SESSIONS = 16;
+  const getAbsenceInfo = (sid, subject) => {
+    const approved = requests.filter(
+      (r) => r.student_id === sid && r.subject_name === subject && ["approved", "accept", "accepted"].includes(r.status?.toLowerCase())
+    ).length;
+    const percent = Math.round((approved / ABSENCE_TOTAL_SESSIONS) * 100);
+    let status = "ok";
+    if (approved >= 4) status = "over";
+    else if (approved === 3) status = "near";
+    return { approved, total: ABSENCE_TOTAL_SESSIONS, percent, status };
+  };
+
+  // Per-student absence summary for the Absence Tracker page
+  const studentsAbsence = groupByStudent(requests).map((g) => {
+    const subjects = [...new Set(g.requests.map((r) => r.subject_name))].map((subject) => ({
+      subject,
+      ...getAbsenceInfo(g.studentId, subject),
+    }));
+    return { studentId: g.studentId, studentName: g.studentName, groupName: g.groupName, subjects };
+  });
+
   // Groups available
   const groupNames = ["SE Group 1", "SE Group 2", "SE Group 3", "SE Group 4"];
 
@@ -190,7 +246,7 @@ function LecturerDashboard() {
           strokeDasharray={`${pendAngle} ${circ}`} strokeDashoffset={circ * 0.25 - accAngle} strokeLinecap="round" />
         <circle cx="70" cy="70" r={r} fill="none" stroke="#f43f5e" strokeWidth="16"
           strokeDasharray={`${rejAngle} ${circ}`} strokeDashoffset={circ * 0.25 - accAngle - pendAngle} strokeLinecap="round" />
-        <text x="70" y="65" textAnchor="middle" fontSize="22" fontWeight="800" fill="#0f172a">{total}</text>
+        <text x="70" y="65" textAnchor="middle" fontSize="22" fontWeight="800" fill="#0f172a">{counts.total}</text>
         <text x="70" y="82" textAnchor="middle" fontSize="11" fill="#94a3b8" fontWeight="600">total</text>
       </svg>
     );
@@ -226,26 +282,30 @@ function LecturerDashboard() {
           <ul className="menu">
             <li className={activeMenu === "dashboard" ? "active" : ""}
               onClick={() => { setActiveMenu("dashboard"); setSidebarOpen(false); }}>
-              <span className="icon">🏠</span> Dashboard
+              <span className="icon"><Home size={18} /></span> Dashboard
             </li>
             <li className={activeMenu === "requests" ? "active" : ""}
               onClick={() => { setActiveMenu("requests"); fetchRequests(); setSidebarOpen(false); }}>
-              <span className="icon">📋</span> Requests
+              <span className="icon"><ClipboardList size={18} /></span> Requests
               {counts.pending > 0 && <span className="badge">{counts.pending}</span>}
+            </li>
+            <li className={activeMenu === "absence" ? "active" : ""}
+              onClick={() => { setActiveMenu("absence"); fetchRequests(); setSidebarOpen(false); }}>
+              <span className="icon"><BarChart3 size={18} /></span> Absence Tracker
             </li>
             <li className={activeMenu === "profile" ? "active" : ""}
               onClick={() => { setActiveMenu("profile"); setSidebarOpen(false); }}>
-              <span className="icon">👤</span> Profile
+              <span className="icon"><User size={18} /></span> Profile
             </li>
             <li className={activeMenu === "help" ? "active" : ""}
               onClick={() => { setActiveMenu("help"); setSidebarOpen(false); }}>
-              <span className="icon">❓</span> Help & Support
+              <span className="icon"><HelpCircle size={18} /></span> Help & Support
             </li>
           </ul>
         </div>
         <div className="sidebar-footer">
           <button className="logout-btn" onClick={handleLogout}>
-            <span className="icon">🚪</span> Logout
+            <span className="icon"><LogOut size={18} /></span> Logout
           </button>
           <div className="profile-tag">
             <div className="avatar-circle">{initials}</div>
@@ -260,17 +320,26 @@ function LecturerDashboard() {
       <div className="main-content">
         <div className="top-header">
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <button className="hamburger-btn" onClick={() => setSidebarOpen(true)}>☰</button>
-            <div>
-              <h1>
-                {activeMenu === "dashboard" ? `Welcome back, ${lecturerName || "Lecturer"} 👋`
+         <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} style={{ marginLeft: "-230px" }}>
+  <Menu size={22} />
+</button>
+<div className="header-title-block">
+  <h1>
+                {activeMenu === "dashboard" ? (
+                  <>
+                    Welcome back, {lecturerName || "Lecturer"}{" "}
+                    <Hand size={22} color="#f59e0b" style={{ display: "inline-block", verticalAlign: "middle", marginLeft: "4px" }} />
+                  </>
+                )
                   : activeMenu === "requests" ? "Student Requests"
+                  : activeMenu === "absence" ? "Absence Tracker"
                   : activeMenu === "profile" ? "Your Profile"
                   : "Help & Support"}
               </h1>
               <p className={activeMenu === "help" ? "help-subtitle" : ""}>
                 {activeMenu === "dashboard" && <span>Lecturer Dashboard</span>}
                 {activeMenu === "requests" && <span>Review and respond to student requests</span>}
+                {activeMenu === "absence" && <span>Track student absences against the 20% limit</span>}
                 {activeMenu === "profile" && <span>Lecturer</span>}
                 {activeMenu === "help" && "Find answers to common questions"}
               </p>
@@ -281,7 +350,7 @@ function LecturerDashboard() {
               <button className="export-csv-btn" onClick={handleExportCSV}>Export CSV</button>
             )}
             <button className="notif-bell" onClick={() => { setActiveMenu("requests"); fetchRequests(); }}>
-              🔔{counts.pending > 0 && <span className="bell-dot"></span>}
+              <Bell size={20} />{counts.pending > 0 && <span className="bell-dot"></span>}
             </button>
           </div>
         </div>
@@ -290,28 +359,28 @@ function LecturerDashboard() {
           <>
             <div className="stats-grid">
               <div className="stat-card">
-                <div className="stat-icon bg-blue">📅</div>
+                <div className="stat-icon bg-blue"><Calendar size={22} /></div>
                 <div>
                   <span className="stat-label">Total Requests</span>
                   <p className="stat-value">{counts.total}</p>
                 </div>
               </div>
               <div className="stat-card">
-                <div className="stat-icon bg-amber">⏳</div>
+                <div className="stat-icon bg-amber"><Hourglass size={22} /></div>
                 <div>
                   <span className="stat-label">Pending</span>
                   <p className="stat-value text-amber">{counts.pending}</p>
                 </div>
               </div>
               <div className="stat-card">
-                <div className="stat-icon bg-emerald">✅</div>
+                <div className="stat-icon bg-emerald"><CheckCircle2 size={22} /></div>
                 <div>
                   <span className="stat-label">Accepted</span>
                   <p className="stat-value text-emerald">{counts.accepted}</p>
                 </div>
               </div>
               <div className="stat-card">
-                <div className="stat-icon bg-rose">❌</div>
+                <div className="stat-icon bg-rose"><XCircle size={22} /></div>
                 <div>
                   <span className="stat-label">Rejected</span>
                   <p className="stat-value text-rose">{counts.rejected}</p>
@@ -323,7 +392,7 @@ function LecturerDashboard() {
               <div className="requests-section">
                 <div className="section-header-row">
                   <div className="card-header-title">
-                    <span>⏳</span>
+                    <span><Hourglass size={20} /></span>
                     <h2>Pending Requests</h2>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
@@ -340,15 +409,24 @@ function LecturerDashboard() {
                 </div>
                 {dashboardPending.length > 0 ? (
                   <div className="lec-request-list">
-                    {dashboardPending.slice(0, 3).map(req => (
-                      <RequestCard key={req.request_id} req={req}
-                        onAccept={() => handleAccept(req.request_id)}
-                        onReject={() => openRejectModal(req.request_id)}
-                        onViewPhoto={url => setLightboxUrl(url)} />
+                    {groupByStudent(dashboardPending).slice(0, 3).map((g) => (
+                      <StudentRequestGroup key={g.studentId}
+                        studentName={g.studentName} studentId={g.studentId} groupName={g.groupName}
+                        requests={g.requests}
+                        isOpen={expandedStudent === g.studentId}
+                        onToggle={() => setExpandedStudent(expandedStudent === g.studentId ? null : g.studentId)}
+                        getAbsenceInfo={getAbsenceInfo}
+                        onAccept={handleAccept}
+                        onReject={openRejectModal}
+                        onViewPhoto={(url) => setLightboxUrl(url)} />
                     ))}
                   </div>
                 ) : (
-                  <div className="empty-log-state"><p>🎉 No pending requests right now.</p></div>
+                  <div className="empty-log-state">
+                    <p style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <PartyPopper size={16} /> No pending requests right now.
+                    </p>
+                  </div>
                 )}
               </div>
 
@@ -382,7 +460,9 @@ function LecturerDashboard() {
                         const isAcc = ["accepted", "accept", "approved"].includes(r.status?.toLowerCase());
                         return (
                           <div key={r.request_id} className="activity-row">
-                            <div className={`activity-icon-badge ${isAcc ? "act-green" : "act-rose"}`}>{isAcc ? "✓" : "✕"}</div>
+                            <div className={`activity-icon-badge ${isAcc ? "act-green" : "act-rose"}`}>
+                              {isAcc ? <Check size={14} /> : <X size={14} />}
+                            </div>
                             <div className="activity-meta">
                               <span className="activity-action">{isAcc ? "Accepted" : "Rejected"} — {r.student_name}</span>
                               <span className="activity-sub">{r.subject_name} · {r.created_at ? new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"}</span>
@@ -404,23 +484,30 @@ function LecturerDashboard() {
           <div className="single-column-workspace" style={{ marginTop: "32px" }}>
             <div className="requests-section">
               <div className="section-header-row">
-                <div className="card-header-title"><span>📋</span><h2>All Student Requests</h2></div>
-                <button className="view-all-link" onClick={fetchRequests}>🔄 Refresh</button>
+                <div className="card-header-title"><span><ClipboardList size={20} /></span><h2>All Student Requests</h2></div>
+                <button className="view-all-link" onClick={fetchRequests} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                  <RefreshCw size={14} /> Refresh
+                </button>
               </div>
               <div className="view-dashboard-bar">
                 <div className="search-input-wrapper">
-                  <span className="search-icon">🔍</span>
+                  <span className="search-icon"><Search size={16} /></span>
                   <input type="text" placeholder="Search by name, ID or subject..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                  {searchTerm && <button className="search-fetch-btn" onClick={() => setSearchTerm("")}>✕ Clear</button>}
+                  {searchTerm && (
+                    <button className="search-fetch-btn" onClick={() => setSearchTerm("")} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <X size={12} /> Clear
+                    </button>
+                  )}
                 </div>
                 <div className="filter-pill-container">
                   {["all", "pending", "accepted", "rejected"].map(s => (
                     <button key={s} className={`filter-pill ${s !== "all" ? `pill-${s}` : ""} ${statusFilter === s ? "active" : ""}`}
-                      onClick={() => { setStatusFilter(s); setPage(1); }}>
+                      onClick={() => { setStatusFilter(s); setPage(1); }}
+                      style={s !== "all" ? { display: "inline-flex", alignItems: "center", gap: "6px" } : {}}>
                       {s === "all" && `All (${counts.total})`}
-                      {s === "pending" && `⏳ Pending (${counts.pending})`}
-                      {s === "accepted" && `✅ Accepted (${counts.accepted})`}
-                      {s === "rejected" && `❌ Rejected (${counts.rejected})`}
+                      {s === "pending" && (<><Hourglass size={14} /> Pending ({counts.pending})</>)}
+                      {s === "accepted" && (<><CheckCircle2 size={14} /> Accepted ({counts.accepted})</>)}
+                      {s === "rejected" && (<><XCircle size={14} /> Rejected ({counts.rejected})</>)}
                     </button>
                   ))}
                 </div>
@@ -435,11 +522,16 @@ function LecturerDashboard() {
               </div>
               {paginatedRequests.length > 0 ? (
                 <div className="lec-request-list">
-                  {paginatedRequests.map(req => (
-                    <RequestCard key={req.request_id} req={req}
-                      onAccept={() => handleAccept(req.request_id)}
-                      onReject={() => openRejectModal(req.request_id)}
-                      onViewPhoto={url => setLightboxUrl(url)} />
+                  {groupByStudent(paginatedRequests).map((g) => (
+                    <StudentRequestGroup key={g.studentId}
+                      studentName={g.studentName} studentId={g.studentId} groupName={g.groupName}
+                      requests={g.requests}
+                      isOpen={expandedStudent === g.studentId}
+                      onToggle={() => setExpandedStudent(expandedStudent === g.studentId ? null : g.studentId)}
+                        getAbsenceInfo={getAbsenceInfo}
+                      onAccept={handleAccept}
+                      onReject={openRejectModal}
+                      onViewPhoto={(url) => setLightboxUrl(url)} />
                   ))}
                 </div>
               ) : (
@@ -451,13 +543,70 @@ function LecturerDashboard() {
                     Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, allFiltered.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, allFiltered.length)} of {allFiltered.length} requests
                   </span>
                   <div className="pagination-btns">
-                    <button className="page-btn page-btn-nav" onClick={() => setPage(currentPage - 1)} disabled={currentPage === 1}>← Prev</button>
+                    <button className="page-btn page-btn-nav" onClick={() => setPage(currentPage - 1)} disabled={currentPage === 1} style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      <ChevronLeft size={14} /> Prev
+                    </button>
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
                       <button key={p} className={`page-btn ${p === currentPage ? "page-btn-active" : ""}`} onClick={() => setPage(p)}>{p}</button>
                     ))}
-                    <button className="page-btn page-btn-nav" onClick={() => setPage(currentPage + 1)} disabled={currentPage === totalPages}>Next →</button>
+                    <button className="page-btn page-btn-nav" onClick={() => setPage(currentPage + 1)} disabled={currentPage === totalPages} style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      Next <ChevronRight size={14} />
+                    </button>
                   </div>
                 </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeMenu === "absence" && (
+          <div className="single-column-workspace" style={{ marginTop: "32px" }}>
+            <div className="requests-section">
+              <div className="section-header-row">
+                <div className="card-header-title"><span><BarChart3 size={20} /></span><h2>Absence Tracker</h2></div>
+                <button className="view-all-link" onClick={fetchRequests} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                  <RefreshCw size={14} /> Refresh
+                </button>
+              </div>
+              <p className="lec-absence-note">
+                Approved absences per subject, counted against the 20% limit
+                ({Math.floor(ABSENCE_TOTAL_SESSIONS * 0.2)} of {ABSENCE_TOTAL_SESSIONS} sessions).
+                A student who goes over 20% has failed that class. Only students in your assigned classes are shown.
+              </p>
+              {studentsAbsence.length > 0 ? (
+                <div className="lec-absence-list">
+                  {studentsAbsence.map((s) => (
+                    <div key={s.studentId} className="lec-absence-student">
+                      <div className="lec-absence-student-head">
+                        <div className="lec-student-meta">
+                          <div className="lec-avatar">{s.studentName?.[0]?.toUpperCase() || "?"}</div>
+                          <div>
+                            <strong className="lec-student-name">{s.studentName}</strong>
+                            <span className="lec-student-sub">ID: {s.studentId} · {s.groupName}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="lec-absence-subjects">
+                        {s.subjects.map((sub) => (
+                          <div key={sub.subject} className="lec-absence-subject-row">
+                            <span className="lec-absence-subject-name">{sub.subject}</span>
+                            <div className="lec-absence-bar-track">
+                              <div className={`lec-absence-bar-fill fill-${sub.status}`} style={{ width: `${Math.min(sub.percent, 100)}%` }} />
+                              <div className="lec-absence-bar-mark" style={{ left: "20%" }} />
+                            </div>
+                            <span className={`lec-absence-badge ${sub.status}`}>
+                              {sub.approved}/{sub.total} ({sub.percent}%)
+                              {sub.status === "over" && <span className="lec-absence-tag"> · Failed</span>}
+                              {sub.status === "near" && <span className="lec-absence-tag"> · Near</span>}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-log-state"><p>No students to track yet.</p></div>
               )}
             </div>
           </div>
@@ -513,14 +662,14 @@ function LecturerDashboard() {
         {activeMenu === "help" && (
           <div className="single-column-workspace" style={{ marginTop: "32px" }}>
             <div className="requests-section">
-              <div className="card-header-title"><span>❓</span><h2>Help & Support</h2></div>
+              <div className="card-header-title"><span><HelpCircle size={20} /></span><h2>Help & Support</h2></div>
               <div className="lec-help-grid">
                 {[
                   { q: "How do I accept a request?", a: "Go to Requests, find the student request and click the green Accept button. The student will be notified automatically." },
                   { q: "Can I reject with a reason?", a: "Yes — clicking Reject opens a dialog where you must enter a reason. The student will see this reason alongside their rejected status." },
                   { q: "Can I view the student's proof photo?", a: "Yes — if a student attached a photo, a 'View Proof Photo' button appears on the request card." },
                   { q: "How do I find a specific student?", a: "Use the search bar on the Requests page. You can search by student name, student ID, or subject name." },
-                  { q: "What are the group tabs?", a: "On the Requests page, tabs 1–4 filter requests by SE Group 1 through 4 so you can focus on one group at a time." },
+                  { q: "Why do I only see some requests?", a: "You only see requests for the subjects and groups assigned to you. Requests for classes you don't teach are handled by their own lecturer." },
                   { q: "Can I export request data?", a: "Yes — click the Export CSV button at the top of the Dashboard to download all requests as a spreadsheet." },
                 ].map((item, i) => (
                   <div key={i} className="lec-help-item">
@@ -538,7 +687,7 @@ function LecturerDashboard() {
       {isLogoutOpen && (
         <div className="lo-overlay" onClick={() => setIsLogoutOpen(false)}>
           <div className="lo-card" onClick={e => e.stopPropagation()}>
-            <div className="lo-icon">🚪</div>
+            <div className="lo-icon"><LogOut size={24} /></div>
             <h3 className="lo-title">Log out?</h3>
             <p className="lo-sub">You'll need to sign in again to access your dashboard.</p>
             <div className="lo-actions">
@@ -577,10 +726,115 @@ function LecturerDashboard() {
       {lightboxUrl && (
         <div className="lec-lightbox-overlay" onClick={() => setLightboxUrl(null)}>
           <div className="lec-lightbox-box" onClick={e => e.stopPropagation()}>
-            <button className="lec-lightbox-close" onClick={() => setLightboxUrl(null)}>✕</button>
+            <button className="lec-lightbox-close" onClick={() => setLightboxUrl(null)}><X size={16} /></button>
             <img src={`http://localhost:5000${lightboxUrl}`} alt="Proof" />
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// Groups a flat list of requests into one entry per student
+function groupByStudent(list) {
+  const map = {};
+  list.forEach((r) => {
+    const key = r.student_id ?? r.student_name;
+    if (!map[key]) {
+      map[key] = { studentId: r.student_id, studentName: r.student_name, groupName: r.group_name, requests: [] };
+    }
+    map[key].requests.push(r);
+  });
+  return Object.values(map);
+}
+
+// One card per student, with each of their requests listed inside (each with its own Accept/Reject)
+function StudentRequestGroup({ studentName, studentId, groupName, requests, isOpen, onToggle, getAbsenceInfo, onAccept, onReject, onViewPhoto }) {
+  const pendingCount = requests.filter((r) => r.status?.toLowerCase() === "pending").length;
+  // Check every subject this student has — flag the header if any is near/over the limit
+  const subjectStatuses = [...new Set(requests.map((r) => r.subject_name))].map((s) => (getAbsenceInfo ? getAbsenceInfo(studentId, s).status : "ok"));
+  const hasOver = subjectStatuses.includes("over");
+  const hasNear = subjectStatuses.includes("near");
+  return (
+    <div className={`lec-group-card ${isOpen ? "lec-group-open" : ""}`}>
+      <button type="button" className="lec-group-header" onClick={onToggle}>
+        <div className="lec-student-meta">
+          <div className="lec-avatar">{studentName?.[0]?.toUpperCase() || "?"}</div>
+          <div>
+            <strong className="lec-student-name">{studentName}</strong>
+            <span className="lec-student-sub">ID: {studentId} · {groupName}</span>
+          </div>
+        </div>
+        <div className="lec-group-header-right">
+          {hasOver && <span className="lec-risk-flag over" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><AlertTriangle size={12} /> At risk · Failed</span>}
+          {!hasOver && hasNear && <span className="lec-risk-flag near" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><AlertTriangle size={12} /> At risk</span>}
+          {pendingCount > 0 && <span className="lec-group-pending-pill">{pendingCount} pending</span>}
+          <span className="lec-group-count">{requests.length} request{requests.length > 1 ? "s" : ""}</span>
+          <span className={`lec-group-chevron ${isOpen ? "open" : ""}`}><ChevronDown size={16} /></span>
+        </div>
+      </button>
+      {isOpen && (
+      <div className="lec-group-body">
+        {requests.map((req) => {
+          const isPending = req.status?.toLowerCase() === "pending";
+          const isRejected = ["rejected", "reject"].includes(req.status?.toLowerCase());
+          const statusClass = isPending ? "pending"
+            : ["accepted", "accept", "approved"].includes(req.status?.toLowerCase()) ? "accepted"
+            : "rejected";
+          const info = getAbsenceInfo ? getAbsenceInfo(studentId, req.subject_name) : null;
+          return (
+            <div key={req.request_id} className="lec-group-request">
+              <div className="lec-group-request-top">
+                <div className="lec-detail-row"><span><BookOpen size={14} /></span><span><strong>{req.subject_name}</strong> — {req.class_time}</span></div>
+                <span className={`lec-status-pill ${statusClass}`}>{req.status || "Pending"}</span>
+              </div>
+              <div className="lec-detail-row"><span><Calendar size={14} /></span><span>{req.request_date ? new Date(req.request_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span></div>
+              <div className="lec-detail-row"><span><FileText size={14} /></span><span className="lec-reason-text">{req.reason}</span></div>
+              {info && (
+                <div className={`lec-absence-badge ${info.status}`} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                  <BarChart3 size={12} /> Approved absences: <strong>{info.approved}/{info.total}</strong> ({info.percent}%)
+                  {info.status === "over" && <span className="lec-absence-tag"> · Failed</span>}
+                  {info.status === "near" && <span className="lec-absence-tag"> · Near limit</span>}
+                </div>
+              )}
+              {isRejected && req.reject_reason && (
+                <div className="lec-reject-reason-display" style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                  <AlertTriangle size={14} /><span>Rejection reason:</span> {req.reject_reason}
+                </div>
+              )}
+              {info && info.status === "near" && (
+                <div className="lec-absence-warn near" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <AlertTriangle size={14} /> One more approval fails this class (limit is 20%).
+                </div>
+              )}
+              {info && info.status === "over" && (
+                <div className="lec-absence-warn over" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <XCircle size={14} /> This student is over the 20% limit and has failed this class.
+                </div>
+              )}
+              {(req.proof_image_url || isPending) && (
+                <div className="lec-group-request-actions">
+                  {req.proof_image_url && (
+                    <button className="lec-photo-btn" onClick={() => onViewPhoto(req.proof_image_url)} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <ImageIcon size={14} /> View Proof
+                    </button>
+                  )}
+                  {isPending && (
+                    <div className="lec-action-btns">
+                      <button className="lec-btn-accept" onClick={() => onAccept(req.request_id)} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                        <Check size={14} /> Accept
+                      </button>
+                      <button className="lec-btn-reject-trigger" onClick={() => onReject(req.request_id)} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                        <X size={14} /> Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
       )}
     </div>
   );
@@ -606,21 +860,29 @@ function RequestCard({ req, onAccept, onReject, onViewPhoto }) {
         <span className={`lec-status-pill ${statusClass}`}>{req.status || "Pending"}</span>
       </div>
       <div className="lec-request-details">
-        <div className="lec-detail-row"><span>📖</span><span><strong>{req.subject_name}</strong> — {req.class_time}</span></div>
-        <div className="lec-detail-row"><span>📅</span><span>{req.request_date ? new Date(req.request_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span></div>
-        <div className="lec-detail-row"><span>📝</span><span className="lec-reason-text">{req.reason}</span></div>
+        <div className="lec-detail-row"><span><BookOpen size={14} /></span><span><strong>{req.subject_name}</strong> — {req.class_time}</span></div>
+        <div className="lec-detail-row"><span><Calendar size={14} /></span><span>{req.request_date ? new Date(req.request_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span></div>
+        <div className="lec-detail-row"><span><FileText size={14} /></span><span className="lec-reason-text">{req.reason}</span></div>
         {isRejected && req.reject_reason && (
-          <div className="lec-reject-reason-display"><span>⚠️ Rejection reason:</span> {req.reject_reason}</div>
+          <div className="lec-reject-reason-display" style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+            <AlertTriangle size={14} /><span>Rejection reason:</span> {req.reject_reason}
+          </div>
         )}
       </div>
       <div className="lec-request-card-footer">
         {req.proof_image_url && (
-          <button className="lec-photo-btn" onClick={() => onViewPhoto(req.proof_image_url)}>🖼️ View Proof</button>
+          <button className="lec-photo-btn" onClick={() => onViewPhoto(req.proof_image_url)} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            <ImageIcon size={14} /> View Proof
+          </button>
         )}
         {isPending && (
           <div className="lec-action-btns">
-            <button className="lec-btn-accept" onClick={onAccept}>✓ Accept</button>
-            <button className="lec-btn-reject-trigger" onClick={onReject}>✕ Reject</button>
+            <button className="lec-btn-accept" onClick={onAccept} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+              <Check size={14} /> Accept
+            </button>
+            <button className="lec-btn-reject-trigger" onClick={onReject} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+              <X size={14} /> Reject
+            </button>
           </div>
         )}
       </div>

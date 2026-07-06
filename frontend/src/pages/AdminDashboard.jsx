@@ -1,6 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import {
+  Home, ClipboardList, Users, BarChart3, Clock, Settings, User, LogOut,
+  Menu, Calendar, CheckCircle2, XCircle, Hourglass, Bell,
+  Pencil, FileText, RefreshCw, Search, BookOpen, Image as ImageIcon,
+  PartyPopper, ChevronDown, ChevronRight, Trash2, AlertTriangle,
+  X, Check, Hand, GraduationCap, Presentation, Shield, TrendingUp,
+  Gauge, Tag
+} from "lucide-react";
 import "../styles/AdminDashboard.css";
 
 const API = "http://localhost:5000";
@@ -17,11 +25,15 @@ function AdminDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [activeGroup, setActiveGroup] = useState("all");
-  const [page, setPageState] = useState(1);
-  const ITEMS_PER_PAGE = 6;
 
-  // Bulk selection
-  const [selectedIds, setSelectedIds] = useState([]);
+  // Grouped cards: which student is expanded (one at a time)
+  const [expandedStudent, setExpandedStudent] = useState(null);
+  // Photo proof lightbox
+  const [lightboxUrl, setLightboxUrl] = useState(null);
+  // Absence Tracker page group filter
+  const [absenceGroup, setAbsenceGroup] = useState("all");
+  // Term 1/2/3 tabs (visual — same data shown across all terms)
+  const [activeTerm, setActiveTerm] = useState("Term 1");
 
   // Modals
   const [deleteTargetId, setDeleteTargetId] = useState(null);
@@ -32,9 +44,10 @@ function AdminDashboard() {
   const [userRoleFilter, setUserRoleFilter] = useState("all");
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
-  const [userForm, setUserForm] = useState({ user_id: "", name: "", email: "", password: "", role: "student", group_name: "SE Group 1" });
+ const [userForm, setUserForm] = useState({ user_id: "", name: "", email: "", password: "", role: "student", group_name: "SE Group 1", subjects: [], terms: [] });
   const [deleteUserId, setDeleteUserId] = useState(null);
-
+  const [isLecturerMatrixOpen, setIsLecturerMatrixOpen] = useState(false);
+const [matrixActiveTerm, setMatrixActiveTerm] = useState("Term 1");
   // Settings (persisted in localStorage)
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem("admin_settings");
@@ -44,7 +57,64 @@ function AdminDashboard() {
   const autoRefreshRef = useRef(null);
 
   const groupNames = ["SE Group 1", "SE Group 2", "SE Group 3", "SE Group 4"];
-
+  const subjectNames = ["Database", "React", "Software", "Visual Art", "AI", "Security", "Research", "Networking", "Cloud Computing", "Mobile Dev", "UX Design", "Machine Learning", "Cryptography", "Tech Ethics", "DevOps", "Blockchain", "Data Science", "Game Dev", "IoT", "Big Data", "Capstone"];
+  const termNames = ["Term 1", "Term 2", "Term 3"];
+  const termTimetables = {
+    "Term 1": {
+      Monday: [
+        { id: "t1-m1", time: "8:30 AM - 11:00 AM", teacher: "Ronan", subject: "Database" },
+        { id: "t1-m2", time: "1:00 PM - 4:30 PM", teacher: "Donal", subject: "React" }
+      ],
+      Tuesday: [
+        { id: "t1-t1", time: "9:30 AM - 11:00 AM", teacher: "Kim", subject: "Software" },
+        { id: "t1-t2", time: "1:50 PM - 5:00 PM", teacher: "Madman", subject: "Visual Art" }
+      ],
+      Wednesday: [
+        { id: "t1-w1", time: "10:00 AM - 12:00 PM", teacher: "Ivy", subject: "AI" },
+        { id: "t1-w2", time: "3:00 PM - 6:00 PM", teacher: "Security", subject: "Security" }
+      ],
+      Thursday: [
+        { id: "t1-th1", time: "1:00 PM - 3:00 PM", teacher: "Leo", subject: "Research", isSeminar: true }
+      ],
+      Friday: [{ id: "t1-f1", isLazy: true }]
+    },
+    "Term 2": {
+      Monday: [
+        { id: "t2-m1", time: "8:30 AM - 11:00 AM", teacher: "Alan", subject: "Networking" },
+        { id: "t2-m2", time: "1:00 PM - 4:30 PM", teacher: "Grace", subject: "Cloud Computing" }
+      ],
+      Tuesday: [
+        { id: "t2-t1", time: "9:30 AM - 11:00 AM", teacher: "Steve", subject: "Mobile Dev" },
+        { id: "t2-t2", time: "1:50 PM - 5:00 PM", teacher: "Nina", subject: "UX Design" }
+      ],
+      Wednesday: [
+        { id: "t2-w1", time: "10:00 AM - 12:00 PM", teacher: "Ivy", subject: "Machine Learning" },
+        { id: "t2-w2", time: "3:00 PM - 6:00 PM", teacher: "Turing", subject: "Cryptography" }
+      ],
+      Thursday: [
+        { id: "t2-th1", time: "1:00 PM - 3:00 PM", teacher: "Ada", subject: "Tech Ethics", isSeminar: true }
+      ],
+      Friday: [{ id: "t2-f1", isLazy: true }]
+    },
+    "Term 3": {
+      Monday: [
+        { id: "t3-m1", time: "8:30 AM - 11:00 AM", teacher: "Linus", subject: "DevOps" },
+        { id: "t3-m2", time: "1:00 PM - 4:30 PM", teacher: "Hal", subject: "Blockchain" }
+      ],
+      Tuesday: [
+        { id: "t3-t1", time: "9:30 AM - 11:00 AM", teacher: "Geoff", subject: "Data Science" },
+        { id: "t3-t2", time: "1:50 PM - 5:00 PM", teacher: "Shigeru", subject: "Game Dev" }
+      ],
+      Wednesday: [
+        { id: "t3-w1", time: "10:00 AM - 12:00 PM", teacher: "Nikola", subject: "IoT" },
+        { id: "t3-w2", time: "3:00 PM - 6:00 PM", teacher: "Doug", subject: "Big Data" }
+      ],
+      Thursday: [
+        { id: "t3-th1", time: "1:00 PM - 3:00 PM", teacher: "Leo", subject: "Capstone", isSeminar: true }
+      ],
+      Friday: [{ id: "t3-f1", isLazy: true }]
+    }
+  };
   useEffect(() => {
     const name = localStorage.getItem("student_name");
     const role = localStorage.getItem("role");
@@ -102,7 +172,6 @@ function AdminDashboard() {
       setUsers(res.data || []);
     } catch (err) {
       console.log(err);
-      // Don't toast on first load if endpoint missing — just log
     }
   };
 
@@ -131,43 +200,38 @@ function AdminDashboard() {
     }
   };
 
-  /* ===================== BULK ACTIONS ===================== */
-  const toggleSelect = (id) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
-
-  const selectAllVisible = () => {
-    const visibleIds = paginatedRequests.map(r => r.request_id);
-    const allSelected = visibleIds.every(id => selectedIds.includes(id));
-    if (allSelected) {
-      setSelectedIds(prev => prev.filter(id => !visibleIds.includes(id)));
-    } else {
-      setSelectedIds(prev => [...new Set([...prev, ...visibleIds])]);
-    }
-  };
-
-  const bulkUpdate = async (status) => {
-    if (selectedIds.length === 0) return;
-    try {
-      await Promise.all(selectedIds.map(id => axios.put(`${API}/request-status`, { id, status })));
-      showToast(`${selectedIds.length} request(s) ${status.toLowerCase()}`, status === "Accepted" ? "#059669" : "#e11d48");
-      setSelectedIds([]);
-      fetchRequests();
-    } catch (err) {
-      console.log(err);
-      showToast("Bulk action failed", "#ef4444");
-    }
-  };
-
   /* ===================== USER ACTIONS ===================== */
   const openAddUser = () => {
     setEditingUser(null);
-    setUserForm({ user_id: "", name: "", email: "", password: "", role: "student", group_name: "SE Group 1" });
+    setUserForm({ user_id: "", name: "", email: "", password: "", role: "student", group_name: "SE Group 1", subjects: [], terms: [] });
     setUserModalOpen(true);
   };
-
-  const openEditUser = (user) => {
+  const handleToggleLecturerClass = (cls) => {
+    setUserForm((prev) => {
+      const has = prev.subjects.includes(cls.subject);
+      const newSubjects = has
+        ? prev.subjects.filter((s) => s !== cls.subject)
+        : [...prev.subjects, cls.subject];
+      const newTerms = termNames.filter((t) =>
+        Object.values(termTimetables[t]).flat().some((c) => c.subject && newSubjects.includes(c.subject))
+      );
+      return { ...prev, subjects: newSubjects, terms: newTerms };
+    });
+  };
+  const openEditUser = async (user) => {
     setEditingUser(user);
+    let subjects = [];
+    if (user.role?.toLowerCase() === "lecturer") {
+      try {
+        const res = await axios.get(`${API}/users/${user.user_id}/assignments`);
+        subjects = [...new Set((res.data || []).map((a) => a.subject_name))];
+      } catch (err) {
+        console.log(err);
+      }
+    }
+    const terms = termNames.filter((t) =>
+      Object.values(termTimetables[t]).flat().some((c) => c.subject && subjects.includes(c.subject))
+    );
     setUserForm({
       user_id: user.user_id || "",
       name: user.name || "",
@@ -175,6 +239,8 @@ function AdminDashboard() {
       password: "",
       role: user.role || "student",
       group_name: user.group_name || "SE Group 1",
+      subjects,
+      terms,
     });
     setUserModalOpen(true);
   };
@@ -193,11 +259,23 @@ function AdminDashboard() {
       return;
     }
     try {
+      const payload = { ...userForm };
+      if (userForm.role === "lecturer") {
+        // Backend expects assignments as (subject, group) pairs.
+        // Since this matrix only picks subjects, apply each selected
+        // subject to every group so the lecturer sees requests from any group.
+        payload.assignments = [];
+        userForm.subjects.forEach((subj) => {
+          groupNames.forEach((g) => {
+            payload.assignments.push({ subject_name: subj, group_name: g });
+          });
+        });
+      }
       if (editingUser) {
-        await axios.put(`${API}/users/${editingUser.user_id}`, userForm);
+        await axios.put(`${API}/users/${editingUser.user_id}`, payload);
         showToast("User updated", "#059669");
       } else {
-        await axios.post(`${API}/users`, userForm);
+        await axios.post(`${API}/users`, payload);
         showToast("User created", "#059669");
       }
       setUserModalOpen(false);
@@ -248,6 +326,32 @@ function AdminDashboard() {
     rejected: requests.filter(r => ["rejected", "reject"].includes(r.status?.toLowerCase())).length,
   };
 
+  // Absence limit: each subject has ~16 sessions; over 20% approved absences fails the class.
+  const ABSENCE_TOTAL_SESSIONS = 16;
+  const getAbsenceInfo = (sid, subject) => {
+    const approved = requests.filter(
+      (r) => r.student_id === sid && r.subject_name === subject && ["approved", "accept", "accepted"].includes(r.status?.toLowerCase())
+    ).length;
+    const percent = Math.round((approved / ABSENCE_TOTAL_SESSIONS) * 100);
+    let status = "ok";
+    if (approved >= 4) status = "over";
+    else if (approved === 3) status = "near";
+    return { approved, total: ABSENCE_TOTAL_SESSIONS, percent, status };
+  };
+
+  // Per-student absence summary for the Absence Tracker page (term + group filtered)
+  const absenceSource = requests.filter((r) => (r.term || "Term 1") === activeTerm);
+  const studentsAbsence = groupByStudent(absenceSource).map((g) => {
+    const subjects = [...new Set(g.requests.map((r) => r.subject_name))].map((subject) => ({
+      subject,
+      ...getAbsenceInfo(g.studentId, subject),
+    }));
+    return { studentId: g.studentId, studentName: g.studentName, groupName: g.groupName, subjects };
+  });
+  const visibleAbsence = absenceGroup === "all"
+    ? studentsAbsence
+    : studentsAbsence.filter((s) => s.groupName === groupNames[absenceGroup - 1]);
+
   const userCounts = {
     total: users.length,
     students: users.filter(u => u.role?.toLowerCase() === "student").length,
@@ -257,6 +361,7 @@ function AdminDashboard() {
 
   const getFilteredRequests = () => {
     return requests.filter(r => {
+      const matchTerm = (r.term || "Term 1") === activeTerm;
       const groupLabel = activeGroup === "all" ? "all" : groupNames[activeGroup - 1];
       const matchGroup = groupLabel === "all" || r.group_name === groupLabel;
       const matchSearch = !searchTerm ||
@@ -267,15 +372,12 @@ function AdminDashboard() {
         (statusFilter === "pending" && r.status?.toLowerCase() === "pending") ||
         (statusFilter === "accepted" && ["accepted", "accept", "approved"].includes(r.status?.toLowerCase())) ||
         (statusFilter === "rejected" && ["rejected", "reject"].includes(r.status?.toLowerCase()));
-      return matchGroup && matchSearch && matchStatus;
+      return matchTerm && matchGroup && matchSearch && matchStatus;
     });
   };
 
   const allFiltered = getFilteredRequests();
-  const totalPages = Math.max(1, Math.ceil(allFiltered.length / ITEMS_PER_PAGE));
-  const currentPage = Math.min(page, totalPages);
-  const paginatedRequests = allFiltered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-  const setPage = (p) => setPageState(Math.max(1, Math.min(p, totalPages)));
+  const requestGroups = groupByStudent(allFiltered);
 
   const filteredUsers = users.filter(u => {
     const matchSearch = !userSearch ||
@@ -292,6 +394,8 @@ function AdminDashboard() {
 
   const dashboardPending = requests.filter(r => r.status?.toLowerCase() === "pending");
   const initials = adminName ? adminName.split(" ").map(n => n[0]).join("").toUpperCase() : "AD";
+
+  const toggleStudent = (sid) => setExpandedStudent(expandedStudent === sid ? null : sid);
 
   /* ===================== CHARTS ===================== */
   const DonutChart = () => {
@@ -312,7 +416,6 @@ function AdminDashboard() {
     );
   };
 
-  // Bar chart: requests per group
   const GroupBarChart = () => {
     const data = groupNames.map(g => ({
       label: g.replace("SE Group ", "G"),
@@ -337,7 +440,6 @@ function AdminDashboard() {
     );
   };
 
-  // Bar chart: status totals
   const StatusBarChart = () => {
     const data = [
       { label: "Pending", value: counts.pending, color: "#f59e0b" },
@@ -367,6 +469,16 @@ function AdminDashboard() {
     return "role-student";
   };
 
+  const termTabs = (
+    <div className="term-tabs" style={{ marginBottom: "20px" }}>
+      {["Term 1", "Term 2", "Term 3"].map((t) => (
+        <button key={t} className={`term-tab ${activeTerm === t ? "term-tab-active" : ""}`} onClick={() => setActiveTerm(t)}>
+          {t}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="dashboard-container">
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
@@ -380,31 +492,34 @@ function AdminDashboard() {
           </div>
           <ul className="menu">
             <li className={activeMenu === "dashboard" ? "active" : ""} onClick={() => { setActiveMenu("dashboard"); setSidebarOpen(false); }}>
-              <span className="icon">🏠</span> Dashboard
+              <span className="icon"><Home size={18} /></span> Dashboard
             </li>
             <li className={activeMenu === "requests" ? "active" : ""} onClick={() => { setActiveMenu("requests"); fetchRequests(); setSidebarOpen(false); }}>
-              <span className="icon">📋</span> All Requests
+              <span className="icon"><ClipboardList size={18} /></span> All Requests
               {counts.pending > 0 && <span className="badge">{counts.pending}</span>}
             </li>
+            <li className={activeMenu === "absence" ? "active" : ""} onClick={() => { setActiveMenu("absence"); fetchRequests(); setSidebarOpen(false); }}>
+              <span className="icon"><Gauge size={18} /></span> Absence Tracker
+            </li>
             <li className={activeMenu === "users" ? "active" : ""} onClick={() => { setActiveMenu("users"); fetchUsers(); setSidebarOpen(false); }}>
-              <span className="icon">👥</span> Manage Users
+              <span className="icon"><Users size={18} /></span> Manage Users
             </li>
             <li className={activeMenu === "analytics" ? "active" : ""} onClick={() => { setActiveMenu("analytics"); setSidebarOpen(false); }}>
-              <span className="icon">📊</span> Analytics
+              <span className="icon"><BarChart3 size={18} /></span> Analytics
             </li>
             <li className={activeMenu === "activity" ? "active" : ""} onClick={() => { setActiveMenu("activity"); setSidebarOpen(false); }}>
-              <span className="icon">🕓</span> Activity Log
+              <span className="icon"><Clock size={18} /></span> Activity Log
             </li>
             <li className={activeMenu === "settings" ? "active" : ""} onClick={() => { setActiveMenu("settings"); setSidebarOpen(false); }}>
-              <span className="icon">⚙️</span> Settings
+              <span className="icon"><Settings size={18} /></span> Settings
             </li>
             <li className={activeMenu === "profile" ? "active" : ""} onClick={() => { setActiveMenu("profile"); setSidebarOpen(false); }}>
-              <span className="icon">👤</span> Profile
+              <span className="icon"><User size={18} /></span> Profile
             </li>
           </ul>
         </div>
         <div className="sidebar-footer">
-          <button className="logout-btn" onClick={handleLogout}><span className="icon">🚪</span> Logout</button>
+          <button className="logout-btn" onClick={handleLogout}><span className="icon"><LogOut size={18} /></span> Logout</button>
           <div className="profile-tag">
             <div className="avatar-circle">{initials}</div>
             <div>
@@ -419,11 +534,19 @@ function AdminDashboard() {
       <div className="main-content">
         <div className="top-header">
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <button className="hamburger-btn" onClick={() => setSidebarOpen(true)}>☰</button>
+            <button className="hamburger-btn" onClick={() => setSidebarOpen(true)} style={{ marginLeft: "-250px" }}>
+              <Menu size={22} />
+            </button>
             <div>
               <h1>
-                {activeMenu === "dashboard" && `Welcome back, ${adminName || "Admin"} 👋`}
+                {activeMenu === "dashboard" && (
+                  <>
+                    Welcome back, {adminName || "Admin"}{" "}
+                    <Hand size={22} color="#f59e0b" style={{ display: "inline-block", verticalAlign: "middle", marginLeft: "4px" }} />
+                  </>
+                )}
                 {activeMenu === "requests" && "All Student Requests"}
+                {activeMenu === "absence" && "Absence Tracker"}
                 {activeMenu === "users" && "Manage Users"}
                 {activeMenu === "analytics" && "Analytics"}
                 {activeMenu === "activity" && "Activity Log"}
@@ -433,6 +556,7 @@ function AdminDashboard() {
               <p>
                 {activeMenu === "dashboard" && <span>Admin Dashboard</span>}
                 {activeMenu === "requests" && <span>Manage all permission requests</span>}
+                {activeMenu === "absence" && <span>Track all students against the 20% limit</span>}
                 {activeMenu === "users" && <span>Students, lecturers & admins</span>}
                 {activeMenu === "analytics" && <span>System insights</span>}
                 {activeMenu === "activity" && <span>Recent decisions</span>}
@@ -445,7 +569,7 @@ function AdminDashboard() {
             {activeMenu === "dashboard" && <button className="export-csv-btn" onClick={handleExportCSV}>Export CSV</button>}
             {activeMenu === "users" && <button className="export-csv-btn" onClick={openAddUser}>+ Add User</button>}
             <button className="notif-bell" onClick={() => { setActiveMenu("requests"); fetchRequests(); }}>
-              🔔{counts.pending > 0 && <span className="bell-dot"></span>}
+              <Bell size={20} />{counts.pending > 0 && <span className="bell-dot"></span>}
             </button>
           </div>
         </div>
@@ -454,28 +578,40 @@ function AdminDashboard() {
         {activeMenu === "dashboard" && (
           <>
             <div className="stats-grid">
-              <div className="stat-card"><div className="stat-icon bg-blue">📅</div><div><span className="stat-label">Total Requests</span><p className="stat-value">{counts.total}</p></div></div>
-              <div className="stat-card"><div className="stat-icon bg-amber">⏳</div><div><span className="stat-label">Pending</span><p className="stat-value text-amber">{counts.pending}</p></div></div>
-              <div className="stat-card"><div className="stat-icon bg-emerald">✅</div><div><span className="stat-label">Accepted</span><p className="stat-value text-emerald">{counts.accepted}</p></div></div>
-              <div className="stat-card"><div className="stat-icon bg-rose">❌</div><div><span className="stat-label">Rejected</span><p className="stat-value text-rose">{counts.rejected}</p></div></div>
+              <div className="stat-card"><div className="stat-icon bg-blue"><Calendar size={22} /></div><div><span className="stat-label">Total Requests</span><p className="stat-value">{counts.total}</p></div></div>
+              <div className="stat-card"><div className="stat-icon bg-amber"><Hourglass size={22} /></div><div><span className="stat-label">Pending</span><p className="stat-value text-amber">{counts.pending}</p></div></div>
+              <div className="stat-card"><div className="stat-icon bg-emerald"><CheckCircle2 size={22} /></div><div><span className="stat-label">Accepted</span><p className="stat-value text-emerald">{counts.accepted}</p></div></div>
+              <div className="stat-card"><div className="stat-icon bg-rose"><XCircle size={22} /></div><div><span className="stat-label">Rejected</span><p className="stat-value text-rose">{counts.rejected}</p></div></div>
             </div>
 
             <div className="dash-two-col">
               <div className="requests-section">
                 <div className="section-header-row">
-                  <div className="card-header-title"><span>⏳</span><h2>Pending Requests</h2></div>
+                  <div className="card-header-title"><span><Hourglass size={20} /></span><h2>Pending Requests</h2></div>
                   {counts.pending > 3 && <button className="view-all-link" onClick={() => { setActiveMenu("requests"); setStatusFilter("pending"); }}>View all {counts.pending} →</button>}
                 </div>
                 {dashboardPending.length > 0 ? (
                   <div className="lec-request-list">
-                    {dashboardPending.slice(0, 3).map(req => (
-                      <AdminRequestCard key={req.request_id} req={req} compact={settings.compactCards}
-                        onAccept={() => updateStatus(req.request_id, "Accepted")}
-                        onReject={() => updateStatus(req.request_id, "Rejected")}
-                        onDelete={() => setDeleteTargetId(req.request_id)} />
+                    {groupByStudent(dashboardPending).slice(0, 3).map(g => (
+                      <AdminStudentGroup key={g.studentId}
+                        studentName={g.studentName} studentId={g.studentId} groupName={g.groupName}
+                        requests={g.requests}
+                        isOpen={expandedStudent === g.studentId}
+                        onToggle={() => toggleStudent(g.studentId)}
+                        getAbsenceInfo={getAbsenceInfo}
+                        onAccept={(id) => updateStatus(id, "Accepted")}
+                        onReject={(id) => updateStatus(id, "Rejected")}
+                        onDelete={(id) => setDeleteTargetId(id)}
+                        onViewPhoto={(url) => setLightboxUrl(url)} />
                     ))}
                   </div>
-                ) : <div className="empty-log-state"><p>🎉 No pending requests right now.</p></div>}
+                ) : (
+                  <div className="empty-log-state">
+                    <p style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <PartyPopper size={16} /> No pending requests right now.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="dash-right-col">
@@ -496,7 +632,9 @@ function AdminDashboard() {
                         const isAcc = ["accepted", "accept", "approved"].includes(r.status?.toLowerCase());
                         return (
                           <div key={r.request_id} className="activity-row">
-                            <div className={`activity-icon-badge ${isAcc ? "act-green" : "act-rose"}`}>{isAcc ? "✓" : "✕"}</div>
+                            <div className={`activity-icon-badge ${isAcc ? "act-green" : "act-rose"}`}>
+                              {isAcc ? <Check size={14} /> : <X size={14} />}
+                            </div>
                             <div className="activity-meta">
                               <span className="activity-action">{isAcc ? "Accepted" : "Rejected"} — {r.student_name}</span>
                               <span className="activity-sub">{r.subject_name}</span>
@@ -517,79 +655,119 @@ function AdminDashboard() {
           <div className="single-column-workspace" style={{ marginTop: "32px" }}>
             <div className="requests-section">
               <div className="section-header-row">
-                <div className="card-header-title"><span>📋</span><h2>All Student Requests</h2></div>
-                <button className="view-all-link" onClick={fetchRequests}>🔄 Refresh</button>
+                <div className="card-header-title"><span><ClipboardList size={20} /></span><h2>All Student Requests</h2></div>
+                <button className="view-all-link" onClick={fetchRequests} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                  <RefreshCw size={14} /> Refresh
+                </button>
               </div>
+              {termTabs}
 
               <div className="view-dashboard-bar">
                 <div className="search-input-wrapper">
-                  <span className="search-icon">🔍</span>
-                  <input type="text" placeholder="Search by name, ID or subject..." value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setPage(1); }} />
-                  {searchTerm && <button className="search-fetch-btn" onClick={() => setSearchTerm("")}>✕ Clear</button>}
+                  <span className="search-icon"><Search size={16} /></span>
+                  <input type="text" placeholder="Search by name, ID or subject..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                  {searchTerm && (
+                    <button className="search-fetch-btn" onClick={() => setSearchTerm("")} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <X size={12} /> Clear
+                    </button>
+                  )}
                 </div>
                 <div className="filter-pill-container">
                   {["all", "pending", "accepted", "rejected"].map(s => (
-                    <button key={s} className={`filter-pill ${s !== "all" ? `pill-${s}` : ""} ${statusFilter === s ? "active" : ""}`} onClick={() => { setStatusFilter(s); setPage(1); }}>
+                    <button key={s} className={`filter-pill ${s !== "all" ? `pill-${s}` : ""} ${statusFilter === s ? "active" : ""}`} onClick={() => setStatusFilter(s)}
+                      style={s !== "all" ? { display: "inline-flex", alignItems: "center", gap: "6px" } : {}}>
                       {s === "all" && `All (${counts.total})`}
-                      {s === "pending" && `⏳ Pending (${counts.pending})`}
-                      {s === "accepted" && `✅ Accepted (${counts.accepted})`}
-                      {s === "rejected" && `❌ Rejected (${counts.rejected})`}
+                      {s === "pending" && (<><Hourglass size={14} /> Pending ({counts.pending})</>)}
+                      {s === "accepted" && (<><CheckCircle2 size={14} /> Accepted ({counts.accepted})</>)}
+                      {s === "rejected" && (<><XCircle size={14} /> Rejected ({counts.rejected})</>)}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className="group-tabs">
-                <button className={`group-tab ${activeGroup === "all" ? "group-tab-active" : ""}`} onClick={() => { setActiveGroup("all"); setPage(1); }}>All Groups</button>
+                <button className={`group-tab ${activeGroup === "all" ? "group-tab-active" : ""}`} onClick={() => setActiveGroup("all")}>All Groups</button>
                 {[1, 2, 3, 4].map(g => (
-                  <button key={g} className={`group-tab ${activeGroup === g ? "group-tab-active" : ""}`} onClick={() => { setActiveGroup(g); setPage(1); }}>Group {g}</button>
+                  <button key={g} className={`group-tab ${activeGroup === g ? "group-tab-active" : ""}`} onClick={() => setActiveGroup(g)}>Group {g}</button>
                 ))}
               </div>
 
-              {/* Bulk action bar */}
-              {paginatedRequests.length > 0 && (
-                <div className="bulk-bar">
-                  <label className="bulk-check-all">
-                    <input type="checkbox"
-                      checked={paginatedRequests.every(r => selectedIds.includes(r.request_id))}
-                      onChange={selectAllVisible} />
-                    Select all on page
-                  </label>
-                  {selectedIds.length > 0 && (
-                    <div className="bulk-actions">
-                      <span className="bulk-count">{selectedIds.length} selected</span>
-                      <button className="bulk-btn bulk-accept" onClick={() => bulkUpdate("Accepted")}>✓ Accept</button>
-                      <button className="bulk-btn bulk-reject" onClick={() => bulkUpdate("Rejected")}>✕ Reject</button>
-                      <button className="bulk-btn bulk-clear" onClick={() => setSelectedIds([])}>Clear</button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {paginatedRequests.length > 0 ? (
-                <div className="admin-request-grid">
-                  {paginatedRequests.map(req => (
-                    <AdminRequestCard key={req.request_id} req={req} compact={settings.compactCards}
-                      selectable selected={selectedIds.includes(req.request_id)}
-                      onToggleSelect={() => toggleSelect(req.request_id)}
-                      onAccept={() => updateStatus(req.request_id, "Accepted")}
-                      onReject={() => updateStatus(req.request_id, "Rejected")}
-                      onDelete={() => setDeleteTargetId(req.request_id)} />
+              {requestGroups.length > 0 ? (
+                <div className="lec-request-list">
+                  {requestGroups.map(g => (
+                    <AdminStudentGroup key={g.studentId}
+                      studentName={g.studentName} studentId={g.studentId} groupName={g.groupName}
+                      requests={g.requests}
+                      isOpen={expandedStudent === g.studentId}
+                      onToggle={() => toggleStudent(g.studentId)}
+                      getAbsenceInfo={getAbsenceInfo}
+                      onAccept={(id) => updateStatus(id, "Accepted")}
+                      onReject={(id) => updateStatus(id, "Rejected")}
+                      onDelete={(id) => setDeleteTargetId(id)}
+                      onViewPhoto={(url) => setLightboxUrl(url)} />
                   ))}
                 </div>
               ) : <div className="empty-log-state"><p>No requests match your filter.</p></div>}
+            </div>
+          </div>
+        )}
 
-              {totalPages > 1 && (
-                <div className="pagination-row">
-                  <span className="pagination-info">Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, allFiltered.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, allFiltered.length)} of {allFiltered.length}</span>
-                  <div className="pagination-btns">
-                    <button className="page-btn page-btn-nav" onClick={() => setPage(currentPage - 1)} disabled={currentPage === 1}>← Prev</button>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                      <button key={p} className={`page-btn ${p === currentPage ? "page-btn-active" : ""}`} onClick={() => setPage(p)}>{p}</button>
-                    ))}
-                    <button className="page-btn page-btn-nav" onClick={() => setPage(currentPage + 1)} disabled={currentPage === totalPages}>Next →</button>
-                  </div>
+        {/* ABSENCE TRACKER */}
+        {activeMenu === "absence" && (
+          <div className="single-column-workspace" style={{ marginTop: "32px" }}>
+            <div className="requests-section">
+              <div className="section-header-row">
+                <div className="card-header-title"><span><Gauge size={20} /></span><h2>Absence Tracker</h2></div>
+                <button className="view-all-link" onClick={fetchRequests} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                  <RefreshCw size={14} /> Refresh
+                </button>
+              </div>
+              {termTabs}
+              <p className="lec-absence-note">
+                Approved absences per subject, counted against the 20% limit
+                ({Math.floor(ABSENCE_TOTAL_SESSIONS * 0.2)} of {ABSENCE_TOTAL_SESSIONS} sessions).
+                A student who goes over 20% has failed that class.
+              </p>
+              <div className="group-tabs">
+                <button className={`group-tab ${absenceGroup === "all" ? "group-tab-active" : ""}`} onClick={() => setAbsenceGroup("all")}>All Groups</button>
+                {[1, 2, 3, 4].map(g => (
+                  <button key={g} className={`group-tab ${absenceGroup === g ? "group-tab-active" : ""}`} onClick={() => setAbsenceGroup(g)}>Group {g}</button>
+                ))}
+              </div>
+              {visibleAbsence.length > 0 ? (
+                <div className="lec-absence-list">
+                  {visibleAbsence.map((s) => (
+                    <div key={s.studentId} className="lec-absence-student">
+                      <div className="lec-absence-student-head">
+                        <div className="lec-student-meta">
+                          <div className="lec-avatar">{s.studentName?.[0]?.toUpperCase() || "?"}</div>
+                          <div>
+                            <strong className="lec-student-name">{s.studentName}</strong>
+                            <span className="lec-student-sub">ID: {s.studentId} · {s.groupName}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="lec-absence-subjects">
+                        {s.subjects.map((sub) => (
+                          <div key={sub.subject} className="lec-absence-subject-row">
+                            <span className="lec-absence-subject-name">{sub.subject}</span>
+                            <div className="lec-absence-bar-track">
+                              <div className={`lec-absence-bar-fill fill-${sub.status}`} style={{ width: `${Math.min(sub.percent, 100)}%` }} />
+                              <div className="lec-absence-bar-mark" style={{ left: "20%" }} />
+                            </div>
+                            <span className={`lec-absence-badge ${sub.status}`}>
+                              {sub.approved}/{sub.total} ({sub.percent}%)
+                              {sub.status === "over" && <span className="lec-absence-tag"> · Failed</span>}
+                              {sub.status === "near" && <span className="lec-absence-tag"> · Near</span>}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
+              ) : (
+                <div className="empty-log-state"><p>No students to track in this group yet.</p></div>
               )}
             </div>
           </div>
@@ -599,24 +777,28 @@ function AdminDashboard() {
         {activeMenu === "users" && (
           <>
             <div className="stats-grid">
-              <div className="stat-card"><div className="stat-icon bg-blue">👥</div><div><span className="stat-label">Total Users</span><p className="stat-value">{userCounts.total}</p></div></div>
-              <div className="stat-card"><div className="stat-icon bg-emerald">🎓</div><div><span className="stat-label">Students</span><p className="stat-value text-emerald">{userCounts.students}</p></div></div>
-              <div className="stat-card"><div className="stat-icon bg-amber">👨‍🏫</div><div><span className="stat-label">Lecturers</span><p className="stat-value text-amber">{userCounts.lecturers}</p></div></div>
-              <div className="stat-card"><div className="stat-icon bg-rose">🛡️</div><div><span className="stat-label">Admins</span><p className="stat-value text-rose">{userCounts.admins}</p></div></div>
+              <div className="stat-card"><div className="stat-icon bg-blue"><Users size={22} /></div><div><span className="stat-label">Total Users</span><p className="stat-value">{userCounts.total}</p></div></div>
+              <div className="stat-card"><div className="stat-icon bg-emerald"><GraduationCap size={22} /></div><div><span className="stat-label">Students</span><p className="stat-value text-emerald">{userCounts.students}</p></div></div>
+              <div className="stat-card"><div className="stat-icon bg-amber"><Presentation size={22} /></div><div><span className="stat-label">Lecturers</span><p className="stat-value text-amber">{userCounts.lecturers}</p></div></div>
+              <div className="stat-card"><div className="stat-icon bg-rose"><Shield size={22} /></div><div><span className="stat-label">Admins</span><p className="stat-value text-rose">{userCounts.admins}</p></div></div>
             </div>
 
             <div className="single-column-workspace">
               <div className="requests-section">
                 <div className="section-header-row">
-                  <div className="card-header-title"><span>👥</span><h2>All Users</h2></div>
+                  <div className="card-header-title"><span><Users size={20} /></span><h2>All Users</h2></div>
                   <button className="view-all-link" onClick={openAddUser}>+ Add User</button>
                 </div>
 
                 <div className="view-dashboard-bar">
                   <div className="search-input-wrapper">
-                    <span className="search-icon">🔍</span>
+                    <span className="search-icon"><Search size={16} /></span>
                     <input type="text" placeholder="Search by name or email..." value={userSearch} onChange={e => setUserSearch(e.target.value)} />
-                    {userSearch && <button className="search-fetch-btn" onClick={() => setUserSearch("")}>✕ Clear</button>}
+                    {userSearch && (
+                      <button className="search-fetch-btn" onClick={() => setUserSearch("")} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                        <X size={12} /> Clear
+                      </button>
+                    )}
                   </div>
                   <div className="filter-pill-container">
                     {["all", "student", "lecturer", "admin"].map(r => (
@@ -645,8 +827,12 @@ function AdminDashboard() {
                         <div className="user-cell"><span className={`role-pill ${roleBadgeClass(u.role)}`}>{u.role}</span></div>
                         <div className="user-cell user-group">{u.role?.toLowerCase() === "student" ? (u.group_name || "—") : "—"}</div>
                         <div className="user-cell user-actions">
-                          <button className="user-edit-btn" onClick={() => openEditUser(u)}>✏️ Edit</button>
-                          <button className="user-delete-btn" onClick={() => setDeleteUserId(u.user_id)}>🗑️</button>
+                          <button className="user-edit-btn" onClick={() => openEditUser(u)} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                            <Pencil size={12} /> Edit
+                          </button>
+                          <button className="user-delete-btn" onClick={() => setDeleteUserId(u.user_id)}>
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -666,11 +852,11 @@ function AdminDashboard() {
           <div className="single-column-workspace" style={{ marginTop: "32px" }}>
             <div className="analytics-grid">
               <div className="requests-section">
-                <div className="card-header-title"><span>📊</span><h2>Requests by Group</h2></div>
+                <div className="card-header-title"><span><BarChart3 size={20} /></span><h2>Requests by Group</h2></div>
                 <GroupBarChart />
               </div>
               <div className="requests-section">
-                <div className="card-header-title"><span>📈</span><h2>Status Overview</h2></div>
+                <div className="card-header-title"><span><TrendingUp size={20} /></span><h2>Status Overview</h2></div>
                 <StatusBarChart />
                 <div className="analytics-summary">
                   <div className="summary-item"><span className="summary-num">{counts.total ? Math.round(counts.accepted / counts.total * 100) : 0}%</span><span className="summary-label">Acceptance Rate</span></div>
@@ -687,8 +873,10 @@ function AdminDashboard() {
           <div className="single-column-workspace" style={{ marginTop: "32px" }}>
             <div className="requests-section">
               <div className="section-header-row">
-                <div className="card-header-title"><span>🕓</span><h2>Decision Activity Log</h2></div>
-                <button className="view-all-link" onClick={fetchRequests}>🔄 Refresh</button>
+                <div className="card-header-title"><span><Clock size={20} /></span><h2>Decision Activity Log</h2></div>
+                <button className="view-all-link" onClick={fetchRequests} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                  <RefreshCw size={14} /> Refresh
+                </button>
               </div>
               {recentActivity.length > 0 ? (
                 <div className="timeline">
@@ -699,7 +887,9 @@ function AdminDashboard() {
                       const isAcc = ["accepted", "accept", "approved"].includes(r.status?.toLowerCase());
                       return (
                         <div key={r.request_id} className="timeline-row">
-                          <div className={`timeline-dot ${isAcc ? "tl-green" : "tl-rose"}`}>{isAcc ? "✓" : "✕"}</div>
+                          <div className={`timeline-dot ${isAcc ? "tl-green" : "tl-rose"}`}>
+                            {isAcc ? <Check size={14} /> : <X size={14} />}
+                          </div>
                           <div className="timeline-body">
                             <div className="timeline-top">
                               <strong>{r.student_name}</strong>
@@ -720,7 +910,7 @@ function AdminDashboard() {
         {activeMenu === "settings" && (
           <div className="single-column-workspace" style={{ marginTop: "32px" }}>
             <div className="requests-section" style={{ maxWidth: "640px" }}>
-              <div className="card-header-title"><span>⚙️</span><h2>Admin Preferences</h2></div>
+              <div className="card-header-title"><span><Settings size={20} /></span><h2>Admin Preferences</h2></div>
               <div className="settings-list">
                 <SettingToggle label="Auto-refresh requests" desc="Reload requests every 30 seconds automatically."
                   on={settings.autoRefresh} onToggle={() => setSettings(s => ({ ...s, autoRefresh: !s.autoRefresh }))} />
@@ -773,13 +963,23 @@ function AdminDashboard() {
         )}
       </div>
 
+      {/* PHOTO PROOF LIGHTBOX */}
+      {lightboxUrl && (
+        <div className="lec-lightbox-overlay" onClick={() => setLightboxUrl(null)}>
+          <div className="lec-lightbox-box" onClick={e => e.stopPropagation()}>
+            <button className="lec-lightbox-close" onClick={() => setLightboxUrl(null)}><X size={16} /></button>
+            <img src={`${API}${lightboxUrl}`} alt="Proof" />
+          </div>
+        </div>
+      )}
+
       {/* USER ADD/EDIT MODAL */}
       {userModalOpen && (
         <div className="modal-overlay" onClick={() => setUserModalOpen(false)}>
           <div className="user-modal" onClick={e => e.stopPropagation()}>
             <div className="user-modal-head">
               <h3>{editingUser ? "Edit User" : "Add New User"}</h3>
-              <button className="close-modal-btn" onClick={() => setUserModalOpen(false)}>✕</button>
+              <button className="close-modal-btn" onClick={() => setUserModalOpen(false)}><X size={14} /></button>
             </div>
             <div className="user-modal-body">
               {!editingUser && (
@@ -822,10 +1022,77 @@ function AdminDashboard() {
                   </select>
                 </div>
               )}
+              {userForm.role === "lecturer" && (
+                <div className="user-field">
+                  <label>Classes Teaching</label>
+                  <button type="button" className="matrix-trigger-btn" onClick={() => setIsLecturerMatrixOpen(true)}>
+                    <span className={userForm.subjects.length > 0 ? "filled-text" : "placeholder-text"}>
+                      {userForm.subjects.length > 0 ? `Selected: ${userForm.subjects.join(", ")}` : "Choose classes to teach..."}
+                    </span>
+                    <span className="arrow-indicator"><ChevronRight size={16} /></span>
+                  </button>
+                </div>
+              )}
             </div>
             <div className="user-modal-foot">
               <button className="btn-cancel" onClick={() => setUserModalOpen(false)}>Cancel</button>
               <button className="btn-save" onClick={saveUser}>{editingUser ? "Save Changes" : "Create User"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* LECTURER CLASS MATRIX */}
+      {isLecturerMatrixOpen && (
+        <div className="modal-overlay" onClick={() => setIsLecturerMatrixOpen(false)}>
+          <div className="modal-window" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>Select Classes to Teach</h3>
+                <p>Check every class this lecturer teaches, across any term.</p>
+              </div>
+              <button className="close-modal-btn" onClick={() => setIsLecturerMatrixOpen(false)}><X size={14} /></button>
+            </div>
+            <div className="modal-term-tabs-wrap">
+              <div className="term-tabs">
+                {termNames.map((t) => (
+                  <button key={t} className={`term-tab ${matrixActiveTerm === t ? "term-tab-active" : ""}`} onClick={() => setMatrixActiveTerm(t)}>{t}</button>
+                ))}
+              </div>
+            </div>
+            <div className="modal-grid-container">
+              <div className="matrix-columns-grid">
+                {Object.keys(termTimetables[matrixActiveTerm]).map((day) => (
+                  <div key={day} className="matrix-day-column">
+                    <h4 className="column-day-title">{day}</h4>
+                    <div className="column-cards-list">
+                      {termTimetables[matrixActiveTerm][day].map((cls, idx) => {
+                        if (cls.isLazy) {
+                          return (
+                            <div key={idx} className="lazy-day-card">
+                              <span>No Classes</span>
+                              <small>Free Day</small>
+                            </div>
+                          );
+                        }
+                        const isSelected = userForm.subjects.includes(cls.subject);
+                        return (
+                          <div key={cls.id || idx} onClick={() => handleToggleLecturerClass(cls)} className={`matrix-class-card ${isSelected ? "selected" : ""}`}>
+                            <div className="card-top-info">
+                              <span className="class-time-text">{cls.time}</span>
+                              <div className="custom-checkbox-circle">{isSelected && <span className="checkbox-check"><Check size={12} /></span>}</div>
+                            </div>
+                            <p className="class-teacher-text">by teacher {cls.teacher}</p>
+                            <div className="card-bottom-subject"><span>{cls.subject}</span></div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="modal-done-btn" onClick={() => setIsLecturerMatrixOpen(false)}>Done</button>
             </div>
           </div>
         </div>
@@ -835,7 +1102,7 @@ function AdminDashboard() {
       {isLogoutOpen && (
         <div className="lo-overlay" onClick={() => setIsLogoutOpen(false)}>
           <div className="lo-card" onClick={e => e.stopPropagation()}>
-            <div className="lo-icon">🚪</div>
+            <div className="lo-icon"><LogOut size={24} /></div>
             <h3 className="lo-title">Log out?</h3>
             <p className="lo-sub">You'll need to sign in again to access the admin panel.</p>
             <div className="lo-actions">
@@ -850,7 +1117,7 @@ function AdminDashboard() {
       {deleteTargetId && (
         <div className="lo-overlay" onClick={() => setDeleteTargetId(null)}>
           <div className="lo-card" onClick={e => e.stopPropagation()}>
-            <div className="lo-icon">🗑️</div>
+            <div className="lo-icon"><Trash2 size={24} /></div>
             <h3 className="lo-title">Delete request?</h3>
             <p className="lo-sub">This permanently removes the request from the system. You can't undo this.</p>
             <div className="lo-actions">
@@ -865,7 +1132,7 @@ function AdminDashboard() {
       {deleteUserId && (
         <div className="lo-overlay" onClick={() => setDeleteUserId(null)}>
           <div className="lo-card" onClick={e => e.stopPropagation()}>
-            <div className="lo-icon">🗑️</div>
+            <div className="lo-icon"><Trash2 size={24} /></div>
             <h3 className="lo-title">Delete user?</h3>
             <p className="lo-sub">This permanently removes the user account. You can't undo this.</p>
             <div className="lo-actions">
@@ -877,6 +1144,19 @@ function AdminDashboard() {
       )}
     </div>
   );
+}
+
+// Groups a flat list of requests into one entry per student
+function groupByStudent(list) {
+  const map = {};
+  list.forEach((r) => {
+    const key = r.student_id ?? r.student_name;
+    if (!map[key]) {
+      map[key] = { studentId: r.student_id, studentName: r.student_name, groupName: r.group_name, requests: [] };
+    }
+    map[key].requests.push(r);
+  });
+  return Object.values(map);
 }
 
 function SettingToggle({ label, desc, on, onToggle }) {
@@ -893,44 +1173,92 @@ function SettingToggle({ label, desc, on, onToggle }) {
   );
 }
 
-function AdminRequestCard({ req, onAccept, onReject, onDelete, compact, selectable, selected, onToggleSelect }) {
-  const isPending = req.status?.toLowerCase() === "pending";
-  const statusClass = isPending ? "pending"
-    : ["accepted", "accept", "approved"].includes(req.status?.toLowerCase()) ? "accepted" : "rejected";
+// One collapsible card per student. Inside, each request has its own actions.
+function AdminStudentGroup({ studentName, studentId, groupName, requests, isOpen, onToggle, getAbsenceInfo, onAccept, onReject, onDelete, onViewPhoto }) {
+  const pendingCount = requests.filter((r) => r.status?.toLowerCase() === "pending").length;
+  const subjectStatuses = [...new Set(requests.map((r) => r.subject_name))].map((s) => (getAbsenceInfo ? getAbsenceInfo(studentId, s).status : "ok"));
+  const hasOver = subjectStatuses.includes("over");
+  const hasNear = subjectStatuses.includes("near");
 
   return (
-    <div className={`lec-request-card ${compact ? "card-compact" : ""} ${selected ? "card-selected" : ""}`}>
-      <div className="lec-request-card-top">
+    <div className={`lec-group-card ${isOpen ? "lec-group-open" : ""}`}>
+      <button type="button" className="lec-group-header" onClick={onToggle}>
         <div className="lec-student-meta">
-          {selectable && (
-            <input type="checkbox" className="card-checkbox" checked={selected} onChange={onToggleSelect} />
-          )}
-          <div className="lec-avatar">{req.student_name?.[0]?.toUpperCase() || "?"}</div>
+          <div className="lec-avatar">{studentName?.[0]?.toUpperCase() || "?"}</div>
           <div>
-            <strong className="lec-student-name">{req.student_name}</strong>
-            <span className="lec-student-sub">ID: {req.student_id} · {req.group_name}</span>
+            <strong className="lec-student-name">{studentName}</strong>
+            <span className="lec-student-sub">ID: {studentId} · {groupName}</span>
           </div>
         </div>
-        <span className={`lec-status-pill ${statusClass}`}>{req.status || "Pending"}</span>
-      </div>
-      <div className="lec-request-details">
-        <div className="lec-detail-row"><span>📖</span><span><strong>{req.subject_name}</strong> — {req.class_time}</span></div>
-        <div className="lec-detail-row"><span>📅</span><span>{req.request_date ? new Date(req.request_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span></div>
-        {!compact && <div className="lec-detail-row"><span>📝</span><span className="lec-reason-text">{req.reason}</span></div>}
-      </div>
-      <div className="lec-request-card-footer">
-        <div className="admin-action-btns">
-          {isPending && (
-            <>
-              <button className="lec-btn-accept" onClick={onAccept}>✓ Accept</button>
-              <button className="lec-btn-reject-trigger" onClick={onReject}>✕ Reject</button>
-            </>
-          )}
-          <button className="admin-btn-delete" onClick={onDelete}>🗑️ Delete</button>
+        <div className="lec-group-header-right">
+          {hasOver && <span className="lec-risk-flag over" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><AlertTriangle size={12} /> At risk · Failed</span>}
+          {!hasOver && hasNear && <span className="lec-risk-flag near" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><AlertTriangle size={12} /> At risk</span>}
+          {pendingCount > 0 && <span className="lec-group-pending-pill">{pendingCount} pending</span>}
+          <span className="lec-group-count">{requests.length} request{requests.length > 1 ? "s" : ""}</span>
+          <span className={`lec-group-chevron ${isOpen ? "open" : ""}`}><ChevronDown size={16} /></span>
         </div>
-      </div>
+      </button>
+      {isOpen && (
+        <div className="lec-group-body">
+          {requests.map((req) => {
+            const isPending = req.status?.toLowerCase() === "pending";
+            const isRejected = ["rejected", "reject"].includes(req.status?.toLowerCase());
+            const statusClass = isPending ? "pending"
+              : ["accepted", "accept", "approved"].includes(req.status?.toLowerCase()) ? "accepted"
+              : "rejected";
+            const info = getAbsenceInfo ? getAbsenceInfo(studentId, req.subject_name) : null;
+            return (
+              <div key={req.request_id} className="lec-group-request">
+                <div className="lec-group-request-top">
+                  <div className="lec-detail-row"><span><BookOpen size={14} /></span><span><strong>{req.subject_name}</strong> — {req.class_time}</span></div>
+                  <span className={`lec-status-pill ${statusClass}`}>{req.status || "Pending"}</span>
+                </div>
+                <div className="lec-detail-row"><span><Calendar size={14} /></span><span>{req.request_date ? new Date(req.request_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span></div>
+                <div className="lec-detail-row"><span><Tag size={14} /></span><span>{req.term || "Term 1"}</span></div>
+                <div className="lec-detail-row"><span><FileText size={14} /></span><span className="lec-reason-text">{req.reason}</span></div>
+                {info && (
+                  <div className={`lec-absence-badge ${info.status}`} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                    <BarChart3 size={12} /> Approved absences: <strong>{info.approved}/{info.total}</strong> ({info.percent}%)
+                    {info.status === "over" && <span className="lec-absence-tag"> · Failed</span>}
+                    {info.status === "near" && <span className="lec-absence-tag"> · Near</span>}
+                  </div>
+                )}
+                {isRejected && req.reject_reason && (
+                  <div className="lec-reject-reason-display" style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                    <AlertTriangle size={14} /><span>Rejection reason:</span> {req.reject_reason}
+                  </div>
+                )}
+                {info && info.status === "near" && (
+                  <div className="lec-absence-warn near" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <AlertTriangle size={14} /> One more approval fails this class (limit is 20%).
+                  </div>
+                )}
+                {info && info.status === "over" && (
+                  <div className="lec-absence-warn over" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <XCircle size={14} /> This student is over the 20% limit and has failed this class.
+                  </div>
+                )}
+                <div className="lec-group-request-actions">
+                  {req.proof_image_url && (
+                    <button className="lec-photo-btn" onClick={() => onViewPhoto(req.proof_image_url)} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <ImageIcon size={14} /> View Proof
+                    </button>
+                  )}
+                  <div className="lec-action-btns">
+                    {isPending && <button className="lec-btn-accept" onClick={() => onAccept(req.request_id)} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}><Check size={14} /> Accept</button>}
+                    {isPending && <button className="lec-btn-reject-trigger" onClick={() => onReject(req.request_id)} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}><X size={14} /> Reject</button>}
+                    <button className="admin-btn-delete" onClick={() => onDelete(req.request_id)} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}><Trash2 size={14} /> Delete</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
+  
 }
+
 
 export default AdminDashboard;
