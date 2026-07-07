@@ -3,7 +3,7 @@ import Login from "./pages/Login";
 import StudentDashboard from "./pages/StudentDashboard";
 import LecturerDashboard from "./pages/LecturerDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
-import ResetPassword from "./pages/ResetPassword";
+import ResetPassword from "./pages/Resetpassword";
 
 function App() {
   return (
