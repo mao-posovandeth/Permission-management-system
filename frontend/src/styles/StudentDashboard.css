@@ -2110,6 +2110,12 @@ body, html, #root {
     flex-wrap: wrap;
     gap: 8px;
   }
+  .top-header > div:first-child {
+    order: 2;
+    align-items: flex-end !important;
+  }
+  .top-header h1, .top-header p { text-align: right; }
+  .notif-bell { order: 1; }
   .top-header h1 { font-size: 17px; }
   .top-header p  { font-size: 11px; }
 
