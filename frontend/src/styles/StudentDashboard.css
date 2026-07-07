@@ -2109,13 +2109,18 @@ body, html, #root {
     padding: 14px 16px 14px 0;
     flex-wrap: wrap;
     gap: 8px;
+    position: relative;
+    justify-content: center;
   }
   .top-header > div:first-child {
-    order: 2;
-    align-items: flex-end !important;
+    align-items: center !important;
   }
-  .top-header h1, .top-header p { text-align: right; }
-  .notif-bell { order: 1; }
+  .top-header h1, .top-header p { text-align: center; }
+  .notif-bell {
+    position: absolute;
+    right: 16px;
+    top: 14px;
+  }
   .top-header h1 { font-size: 17px; }
   .top-header p  { font-size: 11px; }
 
