@@ -5,4 +5,5 @@ frontend/node_modules/
 .env
 dist/
 build/
-.claude/  frontend/package-lock.json
+.claude/
+frontend/package-lock.json
