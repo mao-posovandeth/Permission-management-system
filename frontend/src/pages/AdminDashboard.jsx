@@ -120,7 +120,8 @@ const [matrixActiveTerm, setMatrixActiveTerm] = useState("Term 1");
   useEffect(() => {
     const name = localStorage.getItem("student_name");
     const role = localStorage.getItem("role");
-    if (!name || role !== "admin") {
+    const token = localStorage.getItem("token");
+    if (!name || !token || role !== "admin") {
       localStorage.clear();
       navigate("/login");
       return;

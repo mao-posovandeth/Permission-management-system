@@ -138,8 +138,9 @@ function StudentDashboard() {
     const storedId = localStorage.getItem("user_id");
     const storedName = localStorage.getItem("student_name");
     const role = localStorage.getItem("role");
+    const token = localStorage.getItem("token");
 
-    if (!storedId || role !== "student") {
+    if (!storedId || !token || role !== "student") {
       localStorage.clear();
       navigate("/login");
       return;

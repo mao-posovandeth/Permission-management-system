@@ -2,11 +2,12 @@ import axios from "axios";
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-// Identifies the caller to the backend so role-gated routes (see requireRole
-// in Backend/server.js) can look up the real role for this user_id — the
-// server never trusts a role the client claims, only the id it's acting as.
+// Attaches the JWT issued at login so role-gated routes (see authenticateToken
+// + requireRole in Backend/server.js) can verify who's calling. The token's
+// signature is checked server-side, so the client can't forge a role by
+// editing localStorage the way a plain x-user-id header could be spoofed.
 axios.interceptors.request.use((config) => {
-  const userId = localStorage.getItem("user_id");
-  if (userId) config.headers["x-user-id"] = userId;
+  const token = localStorage.getItem("token");
+  if (token) config.headers["Authorization"] = `Bearer ${token}`;
   return config;
 });

@@ -52,7 +52,8 @@ function LecturerDashboard() {
   useEffect(() => {
     const name = localStorage.getItem("student_name");
     const role = localStorage.getItem("role");
-    if (!name || role !== "lecturer") {
+    const token = localStorage.getItem("token");
+    if (!name || !token || role !== "lecturer") {
       localStorage.clear();
       navigate("/login");
       return;

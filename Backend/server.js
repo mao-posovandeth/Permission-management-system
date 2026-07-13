@@ -5,6 +5,7 @@ import express from "express";
 import { setWebhook, notifyLecturer, renotifyLecturer, handleWebhook, linkForLecturer, BOT_USERNAME } from "./telegram-bot.js";
 import cors from "cors";
 import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -40,26 +41,36 @@ app.use(cors());
 app.use(express.json());
 
 // ============================================================
-//  ACCESS CONTROL — role-gated routes
-//  The client sends its own user_id via the x-user-id header (set once by
-//  frontend/src/config.js). This middleware looks up that user's ACTUAL
-//  role from the database rather than trusting a client-asserted role, and
-//  rejects the request with 403 if it isn't one of the allowed roles.
+//  ACCESS CONTROL — JWT authentication + role-gated routes
+//  /login issues a signed JWT (user_id, role, name) on success. The client
+//  sends it back as `Authorization: Bearer <token>` (attached once by
+//  frontend/src/config.js). authenticateToken verifies the signature and
+//  expiry and attaches the decoded, trustworthy identity to req.user —
+//  requireRole then only has to check req.user.role, since it was already
+//  cryptographically verified rather than re-trusted from a client header.
 // ============================================================
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRES_IN = "8h";
+
+function authenticateToken(req, res, next) {
+  const authHeader = req.header("authorization") || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!token) return res.status(401).json({ message: "Missing or invalid Authorization header" });
+
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    if (err) return res.status(401).json({ message: "Invalid or expired token" });
+    req.user = decoded; // { user_id, role, name }
+    next();
+  });
+}
+
 function requireRole(...allowedRoles) {
   return (req, res, next) => {
-    const userId = req.header("x-user-id");
-    if (!userId) return res.status(401).json({ message: "Missing x-user-id header" });
-
-    db.query("SELECT role FROM users WHERE user_id = ?", [userId], (err, rows) => {
-      if (err) { console.log(err); return res.status(500).json({ message: "Database Error" }); }
-      if (rows.length === 0) return res.status(401).json({ message: "Unknown user" });
-
-      if (!allowedRoles.includes(rows[0].role)) {
-        return res.status(403).json({ message: "Forbidden: insufficient role" });
-      }
-      next();
-    });
+    if (!req.user) return res.status(401).json({ message: "Not authenticated" });
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ message: "Forbidden: insufficient role" });
+    }
+    next();
   };
 }
 
@@ -90,8 +101,15 @@ app.post("/login", (req, res) => {
     if (result.length === 0) return res.status(401).json("Email not found");
     if (result[0].password !== password) return res.status(401).json("Wrong Password");
 
+    const token = jwt.sign(
+      { user_id: result[0].user_id, role: result[0].role, name: result[0].name },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
     res.json({
       message: "Login Success",
+      token,
       user_id: result[0].user_id,
       name: result[0].name,
       role: result[0].role,
@@ -232,7 +250,7 @@ app.put("/request/:id", upload.single("proof_image"), (req, res) => {
 });
 
 // GET ALL REQUESTS (lecturer view)
-app.get("/requests", requireRole("lecturer", "admin"), (req, res) => {
+app.get("/requests", authenticateToken, requireRole("lecturer", "admin"), (req, res) => {
   db.query("SELECT * FROM requests ORDER BY created_at DESC", (err, result) => {
     if (err) { console.log(err); return res.status(500).json("Database Error"); }
     res.json(result);
@@ -240,7 +258,7 @@ app.get("/requests", requireRole("lecturer", "admin"), (req, res) => {
 });
 
 // UPDATE STATUS — now also accepts an optional reject_reason from the lecturer
-app.put("/request-status", requireRole("lecturer", "admin"), (req, res) => {
+app.put("/request-status", authenticateToken, requireRole("lecturer", "admin"), (req, res) => {
   const { id, status, reject_reason } = req.body;
   const sql = "UPDATE requests SET status = ?, reject_reason = ? WHERE request_id = ?";
 
@@ -259,7 +277,7 @@ app.get("/student-requests/:studentId", (req, res) => {
 });
 
 // DELETE REQUEST
-app.delete("/delete-request/:id", requireRole("admin"), (req, res) => {
+app.delete("/delete-request/:id", authenticateToken, requireRole("admin"), (req, res) => {
   db.query("DELETE FROM requests WHERE request_id = ?", [req.params.id], (err, result) => {
     if (err) { console.log("Delete Error:", err); return res.status(500).json("Delete Failed"); }
     if (result.affectedRows === 0) return res.status(404).json("Request Not Found");
@@ -295,7 +313,7 @@ app.put("/update-password/:studentId", (req, res) => {
    ========================================================================== */
 
 // GET ALL USERS (with their group name if they're a student)
-app.get("/users", requireRole("admin"), (req, res) => {
+app.get("/users", authenticateToken, requireRole("admin"), (req, res) => {
   const sql = `
     SELECT u.user_id, u.name, u.email, u.role, g.group_name
     FROM users u
@@ -310,7 +328,7 @@ app.get("/users", requireRole("admin"), (req, res) => {
 });
 
 // ADD NEW USER (and link to a group if they're a student)
-app.post("/users", requireRole("admin"), (req, res) => {
+app.post("/users", authenticateToken, requireRole("admin"), (req, res) => {
   const { user_id, name, email, password, role, group_name, assignments } = req.body;
   if (!user_id || !name || !email || !password || !role) {
     return res.status(400).json({ message: "Missing required fields" });
@@ -354,7 +372,7 @@ app.post("/users", requireRole("admin"), (req, res) => {
 });
 
 // EDIT USER (optionally change password, and re-link group for students)
-app.put("/users/:id", requireRole("admin"), (req, res) => {
+app.put("/users/:id", authenticateToken, requireRole("admin"), (req, res) => {
   const { id } = req.params;
   const { name, email, password, role, group_name, assignments } = req.body;
 
@@ -411,7 +429,7 @@ app.put("/users/:id", requireRole("admin"), (req, res) => {
 });
 
 // DELETE USER (clean up their group mapping first)
-app.delete("/users/:id", requireRole("admin"), (req, res) => {
+app.delete("/users/:id", authenticateToken, requireRole("admin"), (req, res) => {
   const { id } = req.params;
   db.query("DELETE FROM student_groups WHERE student_id=?", [id], () => {
     db.query("DELETE FROM users WHERE user_id=?", [id], (err, result) => {
@@ -423,7 +441,7 @@ app.delete("/users/:id", requireRole("admin"), (req, res) => {
 });
 
 // Fetch a lecturer's assignments so admin's Edit form can preload them
-app.get("/users/:id/assignments", requireRole("admin"), (req, res) => {
+app.get("/users/:id/assignments", authenticateToken, requireRole("admin"), (req, res) => {
   db.query("SELECT subject_name, group_name FROM lecturer_assignments WHERE lecturer_id = ?", [req.params.id], (err, rows) => {
     if (err) { console.log(err); return res.status(500).json([]); }
     res.json(rows);
